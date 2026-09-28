@@ -1,0 +1,16 @@
+backups/
+.env
+.env.*
+!.env.example
+*.tar
+*.tar.gz
+*.tgz
+*.age
+*.enc
+*.key
+*.pem
+*.crt
+*.sqlite*
+*.db
+secrets/
+.DS_Store
