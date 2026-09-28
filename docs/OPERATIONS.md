@@ -62,7 +62,7 @@ set -lx DEPLOY_CONFIRM YES
 ./scripts/deploy-node2.fish root@new-server SERVICE_NAME
 ```
 
-The command uploads the unit, reloads `doom`'s user manager, starts `SERVICE_NAME.service`, and checks systemd's active state. Add an application-specific HTTP or database readiness check before treating a workload as healthy. Use `WantedBy=default.target` in a Quadlet `[Install]` section and keep user lingering enabled for startup after reboot. See the [Podman Quadlet manual](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html).
+The command uploads the unit, reloads `doom`'s user manager, enables and starts `SERVICE_NAME.service`, and checks systemd's active state. Add an application-specific HTTP or database readiness check before treating a workload as healthy. Use `WantedBy=default.target` in a Quadlet `[Install]` section and keep user lingering enabled for startup after reboot. See the [Podman Quadlet manual](https://docs.podman.io/en/latest/markdown/podman-systemd.unit.5.html).
 
 For a Compose application, keep the Compose file and a systemd user unit together, validate the Compose configuration first, and run `podman-compose up -d` as `doom`. Avoid starting the same workload from both Portainer and systemd; two controllers can overwrite or recreate each other's state.
 

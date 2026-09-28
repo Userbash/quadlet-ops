@@ -58,6 +58,7 @@ The script performs these checks and changes:
 7. Enables and starts Nginx and Fail2Ban.
 8. Generates a random Portainer administrator password, stores its bcrypt hash for the container, and saves the plaintext credential file as root-only data under `/home/doom/portainer/secrets`.
 9. Creates and verifies the rootless Podman named volume `portainer_data`.
+10. Enables APT unattended upgrades limited to the detected Debian or Ubuntu security origin. It does not update ordinary feature packages or container images.
 
 Review the result before moving on:
 

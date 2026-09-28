@@ -14,8 +14,10 @@ The project is deliberately plain: SSH, shell scripts, systemd, Quadlet, and tex
 - Creates the unprivileged `doom` service account, provisions subordinate UID/GID ranges, enables a lingering user systemd manager, and starts the rootless Podman socket.
 - Deploys Portainer CE using a rootless Podman Quadlet unit, persistent host storage, automatic systemd startup, and a localhost-only HTTPS listener.
 - Installs and starts additional reviewed `.container` Quadlet definitions from `deploy/` with the same rootless service account and systemd lifecycle.
+- Provides staged bootstrap, stack deployment, verification, backup, and rollback procedures in [Deployment Stages](docs/DEPLOYMENT_STAGES.md).
 - Configures an Nginx download site, JSON range-aware access logs, Certbot/Let's Encrypt certificates, and Fail2Ban jails after DNS is ready.
 - Generates Portainer's initial administrator password on the target and stores the credentials outside the repository with restrictive permissions.
+- Enables unattended security-only APT updates; normal package updates and container image updates remain explicit operations.
 - Creates timestamped server backups and SHA-256 manifests; validates the manifest before restore.
 - Restores reviewed configuration separately from service activation.
 - Runs read-only Nginx, Fail2Ban, Podman Compose, and Alloy validation where their configuration is present.
@@ -66,7 +68,7 @@ ssh -N -L 9443:127.0.0.1:9443 root@new-server
 
 The Portainer service runs under the `doom` user and is started by its user systemd manager after reboot. The application UI is not exposed on a public interface.
 
-To deploy another reviewed container unit, add `deploy/SERVICE_NAME.container` and run `./scripts/deploy-node2.fish root@new-server SERVICE_NAME`. The command installs it under `doom`'s Quadlet directory, reloads the user manager, starts `SERVICE_NAME.service`, and verifies that systemd reports it active. Prepare required secrets and data paths on the host first.
+To deploy another reviewed container unit, add `deploy/SERVICE_NAME.container` and run `./scripts/deploy-node2.fish root@new-server SERVICE_NAME`. The command installs it under `doom`'s Quadlet directory, reloads the user manager, enables and starts `SERVICE_NAME.service`, and verifies that systemd reports it active. Prepare required secrets and data paths on the host first.
 
 After DNS points to the server, configure Nginx, request the Let's Encrypt certificate, and enable the Fail2Ban Nginx jails:
 
@@ -124,6 +126,7 @@ deploy/nginx-node2.conf   HTTPS site with range-aware JSON access logging
 deploy/fail2ban-nginx.local Nginx authentication and bot jails
 docs/FRESH_INSTALL.md     Clean-host setup from prerequisites to Portainer
 docs/QUADLET.md           Quadlet INI units, generated services, and extension rules
+docs/DEPLOYMENT_STAGES.md Complete preparation and deployment lifecycle
 docs/ARCHITECTURE.md      Host, user, container, and network boundaries
 docs/OPERATIONS.md        Backup, restore, validation, and recovery procedures
 docs/SECURITY.md          Secrets, privileges, exposure, and threat limits

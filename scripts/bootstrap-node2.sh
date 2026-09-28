@@ -3,7 +3,7 @@ set -Eeuo pipefail
 [[ $EUID -eq 0 ]] || { echo 'bootstrap must run as root' >&2; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends ca-certificates curl git jq nginx fail2ban certbot podman podman-compose uidmap slirp4netns fuse-overlayfs dbus-user-session apache2-utils openssl tar gzip acl
+apt-get install -y --no-install-recommends ca-certificates curl git jq nginx fail2ban certbot podman podman-compose uidmap slirp4netns fuse-overlayfs dbus-user-session apache2-utils openssl unattended-upgrades tar gzip acl
 id doom >/dev/null 2>&1 || useradd --create-home --shell /bin/bash doom
 [[ $(getent passwd doom | cut -d: -f6) == /home/doom ]] || { echo 'doom must use /home/doom as its home directory' >&2; exit 1; }
 
@@ -55,4 +55,21 @@ runuser -u doom -- env HOME=/home/doom XDG_RUNTIME_DIR="$runtime_dir" podman vol
 runuser -u doom -- env HOME=/home/doom XDG_RUNTIME_DIR="$runtime_dir" podman volume inspect portainer_data >/dev/null
 systemctl enable --now nginx fail2ban
 systemctl is-active --quiet nginx fail2ban
+. /etc/os-release
+security_codename=${VERSION_CODENAME:-}
+[[ -n $security_codename ]] || { echo 'cannot determine distribution codename for security updates' >&2; exit 1; }
+case ${ID:-} in
+  debian) security_origin="origin=Debian,codename=${security_codename}-security" ;;
+  ubuntu) security_origin="origin=Ubuntu,codename=${security_codename}-security" ;;
+  *) echo "unsupported distribution for security-only updates: ${ID:-unknown}" >&2; exit 1 ;;
+esac
+cat > /etc/apt/apt.conf.d/52-node2-security-only <<EOF
+Unattended-Upgrade::Allowed-Origins {};
+Unattended-Upgrade::Origins-Pattern { "$security_origin"; };
+EOF
+cat > /etc/apt/apt.conf.d/20auto-upgrades <<'EOF'
+APT::Periodic::Update-Package-Lists "1";
+APT::Periodic::Unattended-Upgrade "1";
+EOF
+systemctl enable --now apt-daily.timer apt-daily-upgrade.timer
 echo 'bootstrap complete: rootless Podman is ready for doom; SSH, DNS, TLS, and firewall policy were left unchanged'

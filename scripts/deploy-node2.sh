@@ -14,7 +14,7 @@ ssh -o BatchMode=yes "$target" "install -d -o doom -g doom -m 0750 /home/doom/.c
 ssh -o BatchMode=yes "$target" "install -o doom -g doom -m 0644 /dev/stdin /home/doom/.config/containers/systemd/$unit_name.container" < "$unit"
 service_uid=$(ssh -o BatchMode=yes "$target" 'id -u doom')
 runtime_dir="/run/user/$service_uid"
-ssh -o BatchMode=yes "$target" "runuser -u doom -- env HOME=/home/doom XDG_RUNTIME_DIR='$runtime_dir' DBUS_SESSION_BUS_ADDRESS='unix:path=$runtime_dir/bus' systemctl --user daemon-reload && runuser -u doom -- env HOME=/home/doom XDG_RUNTIME_DIR='$runtime_dir' DBUS_SESSION_BUS_ADDRESS='unix:path=$runtime_dir/bus' systemctl --user start '$unit_name.service' && runuser -u doom -- env HOME=/home/doom XDG_RUNTIME_DIR='$runtime_dir' DBUS_SESSION_BUS_ADDRESS='unix:path=$runtime_dir/bus' systemctl --user is-active '$unit_name.service'"
+ssh -o BatchMode=yes "$target" "runuser -u doom -- env HOME=/home/doom XDG_RUNTIME_DIR='$runtime_dir' DBUS_SESSION_BUS_ADDRESS='unix:path=$runtime_dir/bus' systemctl --user daemon-reload && runuser -u doom -- env HOME=/home/doom XDG_RUNTIME_DIR='$runtime_dir' DBUS_SESSION_BUS_ADDRESS='unix:path=$runtime_dir/bus' systemctl --user enable --now '$unit_name.service' && runuser -u doom -- env HOME=/home/doom XDG_RUNTIME_DIR='$runtime_dir' DBUS_SESSION_BUS_ADDRESS='unix:path=$runtime_dir/bus' systemctl --user is-active '$unit_name.service'"
 if [[ $unit_name == portainer ]]; then
   ssh -o BatchMode=yes "$target" 'curl --fail --silent --show-error --insecure --retry 20 --retry-connrefused --retry-delay 1 --max-time 3 https://127.0.0.1:9443/api/status >/dev/null'
   printf 'Portainer deployed on %s; its HTTPS endpoint is bound to localhost:9443.\n' "$target"

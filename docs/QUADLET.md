@@ -83,7 +83,7 @@ ssh root@node2 'uid=$(id -u doom); runuser -u doom -- env HOME=/home/doom XDG_RU
 ssh root@node2 'uid=$(id -u doom); runuser -u doom -- env HOME=/home/doom XDG_RUNTIME_DIR=/run/user/$uid podman inspect portainer'
 ```
 
-The project deployment command uploads the selected unit, reloads the user manager, starts the service, and checks its active state. For Portainer it also waits for `https://127.0.0.1:9443/api/status` to respond.
+The project deployment command uploads the selected unit, reloads the user manager, enables it with `systemctl --user enable --now`, and checks its active state. For Portainer it also waits for `https://127.0.0.1:9443/api/status` to respond.
 
 ```fish
 set -lx DEPLOY_CONFIRM YES
