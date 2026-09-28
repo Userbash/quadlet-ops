@@ -1,0 +1,15 @@
+[nginx-http-auth]
+enabled = true
+port = http,https
+logpath = /var/log/nginx/error.log
+maxretry = 5
+findtime = 10m
+bantime = 1h
+
+[nginx-botsearch]
+enabled = true
+port = http,https
+logpath = /var/log/nginx/access.log
+maxretry = 8
+findtime = 10m
+bantime = 1h

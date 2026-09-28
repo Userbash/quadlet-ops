@@ -1,155 +1,144 @@
 # Node2 Ops Kit
 
-**A small, understandable toolkit for preparing and maintaining a Linux server.** It backs up host configuration, bootstraps a clean Debian or Ubuntu machine, restores reviewed configuration, and validates services before activation.
+Node2 Ops Kit is a small set of Bash and fish scripts for preparing and maintaining a Debian or Ubuntu server. It installs a minimal host baseline, prepares a dedicated rootless Podman account, deploys Portainer as a systemd-managed container, and provides separate backup, restore, validation, and activation commands.
 
 **Suggested GitHub repository:** `node2-ops-kit`
 
-**GitHub description:** `Simple, safety-minded automation for bootstrapping, backing up, restoring, and validating a Debian/Ubuntu server running Nginx, Fail2Ban, Podman, Alloy, and Loki.`
+**GitHub description:** `Readable automation for bootstrapping a Debian/Ubuntu server, preparing rootless Podman, deploying Portainer, and managing reviewed host configuration over SSH.`
 
-The project follows KISS: a few readable Bash and fish scripts, plain configuration files, SSH for remote operations, and explicit boundaries between read-only checks and changes to a server. It does not hide infrastructure behind a framework.
+The project is deliberately plain: SSH, shell scripts, systemd, Quadlet, and text configuration. Every command that writes to a server requires `DEPLOY_CONFIRM=YES`. Bootstrap and deployment do not configure SSH, DNS, TLS, or firewall policy.
 
-## What It Does
+## Capabilities
 
-- Checks local tools and basic environment setup before a run.
-- Connects to a server over SSH without asking for an interactive password.
-- Captures a timestamped backup of host configuration, service status, container metadata, and selected application configuration.
-- Writes SHA-256 checksums for each backup artifact and verifies them before restore.
-- Installs baseline packages and creates the expected service account and directories on a clean Debian or Ubuntu host.
-- Restores reviewed Nginx, Fail2Ban, systemd, Podman, and observability configuration.
-- Validates Nginx, Fail2Ban, Podman Compose, Alloy, and service state without restarting services.
-- Activates reviewed configuration only after an explicit confirmation flag.
-- Supports Nginx download logging with the requested and returned byte ranges, making segmented downloads easier to investigate in Loki.
-- Runs shell checks and packages a public project bundle in GitHub Actions. Production deployment is intentionally not automated.
+- Installs Nginx, Fail2Ban, Podman, Podman Compose, and rootless-container prerequisites on Debian or Ubuntu.
+- Creates the unprivileged `doom` service account, provisions subordinate UID/GID ranges, enables a lingering user systemd manager, and starts the rootless Podman socket.
+- Deploys Portainer CE using a rootless Podman Quadlet unit, persistent host storage, automatic systemd startup, and a localhost-only HTTPS listener.
+- Installs and starts additional reviewed `.container` Quadlet definitions from `deploy/` with the same rootless service account and systemd lifecycle.
+- Configures an Nginx download site, JSON range-aware access logs, Certbot/Let's Encrypt certificates, and Fail2Ban jails after DNS is ready.
+- Generates Portainer's initial administrator password on the target and stores the credentials outside the repository with restrictive permissions.
+- Creates timestamped server backups and SHA-256 manifests; validates the manifest before restore.
+- Restores reviewed configuration separately from service activation.
+- Runs read-only Nginx, Fail2Ban, Podman Compose, and Alloy validation where their configuration is present.
+- Keeps the host-level and container-level responsibilities separate: Nginx and Fail2Ban run on the host; containers run as `doom`.
+- Runs shell checks, scans public files for obvious secrets, and packages a public bundle in GitHub Actions.
 
-## What It Does Not Do
+## Important Limits
 
-- It does not back up application databases, user uploads, or container volume data. Those can be large and need a separate retention and encryption policy.
-- It does not configure SSH keys, DNS, TLS certificates, or firewall policy on a new server.
-- It does not put production credentials in the repository or pass them to GitHub Actions.
-- It does not make a restored server live automatically. Restore and activation are separate steps.
+- Portainer manages Podman through Podman's Docker-compatible API. Portainer's current documentation says rootless Podman may work but is not officially supported, and its documented supported baseline is rootful Podman 5 on CentOS 9. This project's Debian/Ubuntu plus rootless setup is therefore an optional, best-effort Portainer configuration, not a vendor-supported combination. See [Portainer's Podman requirements](https://docs.portainer.io/admin/environments/add/podman) and [Podman socket instructions](https://docs.portainer.io/admin/environments/add/podman/socket).
+- The Portainer listener binds to `127.0.0.1:9443`. Reach it through an SSH tunnel unless you deliberately configure a reviewed TLS reverse proxy.
+- The repository contains the platform bootstrap and Portainer unit, not application manifests for Nextcloud, 3x-ui, Open WebUI, or other workloads. Add and review each workload's Quadlet manifest and server-side secret files before deploying it.
+- Backups do not include live database contents, user uploads, or container storage. Define a separate tested backup and retention plan for application data.
+- Firewall rules, SSH policy, DNS, TLS issuance, and cloud-provider networking are intentionally not changed by scripts.
 
 ## Requirements
 
-On the operator machine:
+On the operator machine: Git, fish, Bash, OpenSSH client, tar, and `sha256sum`. The operator must be able to connect to the target using a key without an interactive password prompt.
 
-- Git, OpenSSH client, Bash, tar, and `sha256sum`.
-- fish for the documented command wrappers.
-- An SSH key that can connect to the target without an interactive password prompt.
-
-On the target:
-
-- Debian or Ubuntu with systemd and root or sudo access.
-- A network connection to the distribution package repositories.
-- For observability validation and activation: Podman Compose and the existing Alloy/Loki configuration.
+On the target: a clean Debian or Ubuntu host using systemd, root SSH access, and network access to distribution repositories and container registries. Confirm the provider firewall allows only the ports required by your workloads. The bootstrap enables Nginx and Fail2Ban but does not enable a firewall.
 
 ## Quick Start
 
-Clone the project, configure the private local environment file, check prerequisites, then take a backup:
-
 ```fish
-git clone https://github.com/ORG/node2-ops-kit.git
+git clone https://github.com/YOUR_GITHUB_ACCOUNT/node2-ops-kit.git
 cd node2-ops-kit
 cp .env.example .env
 chmod 600 .env
 ./scripts/check-local.fish
-./scripts/backup-node2.fish node2
 ```
 
-The default target is `node2`. Set `NODE2_HOST` in `.env`, pass a host to a script, or define an SSH alias in `~/.ssh/config`. The SSH identity should already be available to OpenSSH; `NODE2_SSH_KEY` can select a specific private key.
+Set `NODE2_HOST` in `.env`, or pass a host to a script. The default is `node2`. Keep an SSH identity loaded in OpenSSH or configure it in `~/.ssh/config`.
 
-## Setting Up a Clean Server
+## Fresh Server Setup
 
-Bootstrap installs baseline Debian/Ubuntu packages, creates the `doom` account if it does not exist, prepares observability directories, and enables Nginx and Fail2Ban. It deliberately leaves SSH access, DNS, certificates, and firewall policy alone.
+Read [Fresh Installation](docs/FRESH_INSTALL.md) before changing a server. In brief, bootstrap and Portainer deployment are separate, confirmed actions:
 
 ```fish
+set -lx DEPLOY_CONFIRM YES
 ./scripts/bootstrap-node2.fish root@new-server
+./scripts/deploy-node2.fish root@new-server
 ```
 
-Bootstrap changes the target and requires root SSH access. Review the script before running it on a production host.
-
-## Restore and Activate
-
-Restore writes archived files directly to their original paths. It can replace files on the target, so make a fresh backup first and inspect the archive before proceeding.
+After deployment, create an SSH tunnel and open `https://localhost:9443`:
 
 ```fish
-./scripts/backup-node2.fish new-server
-set -lx DEPLOY_CONFIRM YES
-./scripts/restore-node2.fish new-server backups/node2-YYYYmmddTHHMMSSZ
-./scripts/validate-node2.fish new-server
+ssh -N -L 9443:127.0.0.1:9443 root@new-server
 ```
 
-Validation is read-only. Only after reviewing its results, activate services explicitly:
+The Portainer service runs under the `doom` user and is started by its user systemd manager after reboot. The application UI is not exposed on a public interface.
+
+To deploy another reviewed container unit, add `deploy/SERVICE_NAME.container` and run `./scripts/deploy-node2.fish root@new-server SERVICE_NAME`. The command installs it under `doom`'s Quadlet directory, reloads the user manager, starts `SERVICE_NAME.service`, and verifies that systemd reports it active. Prepare required secrets and data paths on the host first.
+
+After DNS points to the server, configure Nginx, request the Let's Encrypt certificate, and enable the Fail2Ban Nginx jails:
 
 ```fish
 set -lx DEPLOY_CONFIRM YES
-./scripts/activate-node2.fish new-server
+./scripts/configure-web.fish root@new-server
 ```
 
-Activation tests Nginx configuration, checks Fail2Ban, reloads Nginx, restarts Fail2Ban, and runs `podman-compose up -d` for the observability stack when its compose file exists. It does not apply firewall rules.
+The web configuration requires real `NODE2_DOMAIN` and `LETSENCRYPT_EMAIL` values in `.env`. It first serves the ACME challenge over HTTP, requests the certificate with Certbot, then installs the HTTPS configuration. Nginx writes `$http_range` and `$sent_http_content_range` to a JSON access log for download analysis.
 
-## Configuration and Secrets
+Bootstrap creates a random Portainer admin password on the target. The generated credentials are stored in `/home/doom/portainer/secrets/admin-credentials.txt` with mode `0600` and are never copied into the repository or printed by the scripts. Read them once through a protected root session and rotate them in Portainer after initial setup.
 
-Copy `.env.example` to `.env` and keep the file private with mode `600`. The scripts source `.env` as shell syntax, so only put trusted values in it. Do not commit `.env`, private keys, certificates, tokens, databases, logs, or backup archives.
+## Backup and Recovery
+
+```fish
+./scripts/backup-node2.fish node2
+./scripts/validate-node2.fish node2
+```
+
+Restore and activation write to the host, so set the confirmation variable for each command:
+
+```fish
+set -lx DEPLOY_CONFIRM YES
+./scripts/restore-node2.fish node2 backups/node2-YYYYmmddTHHMMSSZ
+./scripts/validate-node2.fish node2
+./scripts/activate-node2.fish node2
+```
+
+Review [Operations](docs/OPERATIONS.md), [Architecture](docs/ARCHITECTURE.md), and [Security](docs/SECURITY.md) before using restore on a production host.
+
+## Configuration
+
+Copy `.env.example` to `.env`, keep it mode `600`, and only add trusted shell assignments. The scripts source this file as Bash syntax. Values exported by the caller take precedence over `.env`.
 
 | Variable | Purpose | Default |
 |---|---|---|
 | `NODE2_HOST` | SSH host or `user@host` target | `node2` |
-| `NODE2_USER` | SSH username used when host has no username | `root` |
-| `NODE2_SSH_KEY` | Optional private-key path | OpenSSH default |
+| `NODE2_USER` | SSH user when the target has no username | `root` |
+| `NODE2_SSH_KEY` | Optional SSH private-key path | OpenSSH default |
+| `NODE2_DOMAIN` | DNS name for the Nginx site and certificate | required for `configure-web` |
+| `LETSENCRYPT_EMAIL` | ACME account email | required for `configure-web` |
+| `NODE2_WEB_ROOT` | Host web root for downloads and ACME challenges | `/var/www/node2` |
 | `BACKUP_ROOT` | Local destination for timestamped backups | `backups` |
-| `DEPLOY_CONFIRM` | Required `YES` for restore and activate | `NO` |
-| `ACTIVATE` | Reserved for future automation | `NO` |
+| `DEPLOY_CONFIRM` | Required `YES` for bootstrap, deployment, restore, and activation | `NO` |
 
-Application secrets belong in a secret manager or protected files on the server, not in this repository. Backups may contain sensitive host configuration; store them encrypted and limit access.
+Never commit `.env`, credentials, keys, certificates, databases, logs, or backup archives. Backups may contain sensitive host configuration; encrypt them and restrict access.
 
-## Project Layout
+## Repository Layout
 
 ```text
-scripts/
-  lib/common.sh             Shared safety helpers
-  check-local.fish          Check operator-machine prerequisites
-  bootstrap-node2.fish      Prepare a clean Debian/Ubuntu host
-  backup-node2.fish         Create a timestamped backup
-  restore-node2.fish        Verify and restore a selected backup
-  validate-node2.fish       Run read-only service/config checks
-  activate-node2.fish       Explicitly reload/restart services
-  *.sh                      Bash implementations
-docs/
-  ARCHITECTURE.md           Services and data flow
-  OPERATIONS.md             Backup, restore, recovery, diagnosis
-  SECURITY.md               Secret handling and threat boundaries
-.env.example                Public configuration template
-.github/workflows/           CI validation and public bundle packaging
+scripts/                  Operator-side Bash and fish commands
+scripts/lib/common.sh     Shared SSH, environment, and confirmation helpers
+deploy/                   Quadlet definitions installed on the server
+deploy/nginx-node2.conf   HTTPS site with range-aware JSON access logging
+deploy/fail2ban-nginx.local Nginx authentication and bot jails
+docs/FRESH_INSTALL.md     Clean-host setup from prerequisites to Portainer
+docs/ARCHITECTURE.md      Host, user, container, and network boundaries
+docs/OPERATIONS.md        Backup, restore, validation, and recovery procedures
+docs/SECURITY.md          Secrets, privileges, exposure, and threat limits
+.env.example              Public operator configuration template
+.github/workflows/        CI checks and public project packaging
 ```
 
-## Common Commands
-
-Run from the repository root:
+## Local Checks
 
 ```fish
-./scripts/check-local.fish
-./scripts/backup-node2.fish node2
-./scripts/validate-node2.fish node2
 bash -n scripts/*.sh scripts/lib/*.sh
+fish -n scripts/*.fish
 git diff --check
 ```
 
-To confirm an archive locally:
-
-```fish
-cd backups/node2-YYYYmmddTHHMMSSZ
-sha256sum -c checksums.sha256
-```
-
-See [Operations](docs/OPERATIONS.md), [Architecture](docs/ARCHITECTURE.md), and [Security](docs/SECURITY.md) for full procedures and limits.
-
-## GitHub Actions
-
-The workflow checks shell syntax and obvious secret patterns, then packages the public project files. It does not include local backups or `.env` files. Scheduled/manual CI never deploys to a production host.
-
-## Contributing
-
-Keep changes small and readable. Document new environment variables in `.env.example`, preserve the separation between read-only and write operations, and include validation and rollback notes in pull requests. See [CONTRIBUTING.md](CONTRIBUTING.md).
+The GitHub Actions workflow runs these syntax checks, scans files for obvious secret patterns, and creates a bundle without `.env` files or local backups. It never deploys to a production host.
 
 ## License
 
