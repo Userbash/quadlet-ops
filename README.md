@@ -123,6 +123,7 @@ deploy/                   Quadlet definitions installed on the server
 deploy/nginx-node2.conf   HTTPS site with range-aware JSON access logging
 deploy/fail2ban-nginx.local Nginx authentication and bot jails
 docs/FRESH_INSTALL.md     Clean-host setup from prerequisites to Portainer
+docs/QUADLET.md           Quadlet INI units, generated services, and extension rules
 docs/ARCHITECTURE.md      Host, user, container, and network boundaries
 docs/OPERATIONS.md        Backup, restore, validation, and recovery procedures
 docs/SECURITY.md          Secrets, privileges, exposure, and threat limits

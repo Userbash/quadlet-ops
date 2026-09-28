@@ -2,7 +2,7 @@
 
 ## Design
 
-The toolkit keeps the host baseline small and uses one unprivileged Linux account for rootless containers. Bash scripts connect over SSH; fish wrappers provide a consistent operator interface. Quadlet turns the Portainer container declaration into a user systemd service.
+The toolkit keeps the host baseline small and uses one unprivileged Linux account for rootless containers. Bash scripts connect over SSH; fish wrappers provide a consistent operator interface. Quadlet turns the Portainer container declaration into a user systemd service. See [Quadlet Services](QUADLET.md) for the complete unit contract.
 
 ```text
 operator workstation
