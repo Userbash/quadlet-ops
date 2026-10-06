@@ -1,0 +1,5 @@
+--- a/etc/nginx/sites-enabled/terranex.conf
++++ b/etc/nginx/sites-enabled/terranex.conf
+@@ -64,1 +64,2 @@
+     access_log /var/log/nginx/metrics/nextcloud.log node2_metrics;
++    access_log /var/log/nginx/incident-correlation/nextcloud.log node2_incident;

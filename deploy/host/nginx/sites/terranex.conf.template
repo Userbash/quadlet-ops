@@ -1,0 +1,256 @@
+# Отсекаем обращения к nginx по IP без имени сайта.
+upstream xhttp_3xui_backend {
+    server 127.0.0.1:8082;
+    keepalive 64;
+    keepalive_requests 1000;
+    keepalive_timeout 60s;
+}
+
+# Reuse local DoH upstream connections to avoid a new TCP/TLS connection per query.
+upstream doh_dns_backend {
+    server 127.0.0.1:4443;
+    keepalive 64;
+    keepalive_requests 1000;
+    keepalive_timeout 60s;
+}
+
+server {
+    listen 80 default_server;
+    listen [::]:80 default_server;
+    server_name _;
+    return 444;
+}
+server {
+    listen 443 ssl http2 default_server;
+    listen [::]:443 ssl http2 default_server;
+    server_name _;
+    ssl_reject_handshake on;
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name __NODE2_DOMAIN__;
+    return 301 https://$host$request_uri;
+}
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name __NODE2_DOMAIN__;
+    ssl_certificate /etc/letsencrypt/live/__NODE2_DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__NODE2_DOMAIN__/privkey.pem;
+    root /var/www/html;
+    index index.html;
+    location / { try_files $uri $uri/ =404; }
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name cloud.__NODE2_DOMAIN__;
+    return 301 https://$host$request_uri;
+}
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name cloud.__NODE2_DOMAIN__;
+    ssl_certificate /etc/letsencrypt/live/cloud.__NODE2_DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/cloud.__NODE2_DOMAIN__/privkey.pem;
+    add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;
+    # node2 metrics omit request paths, client addresses, and headers.
+    access_log /var/log/nginx/incident-correlation/nextcloud.log node2_incident;
+    access_log /var/log/nginx/metrics/nextcloud.log node2_metrics;
+    location / {
+        proxy_pass http://127.0.0.1:8081;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Port 443;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        client_max_body_size 64G;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        #proxy_request_buffering off;
+    }
+}
+
+server {
+    listen 80;
+    listen [::]:80;
+    server_name ai.__NODE2_DOMAIN__;
+    return 301 https://$host$request_uri;
+}
+server {
+    listen 443 ssl http2;
+    listen [::]:443 ssl http2;
+    server_name ai.__NODE2_DOMAIN__;
+    ssl_certificate /etc/letsencrypt/live/ai.__NODE2_DOMAIN__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/ai.__NODE2_DOMAIN__/privkey.pem;
+    add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;
+
+    location = /dns-query {
+        limit_req zone=doh_per_ip burst=600 nodelay;
+        limit_conn doh_conn 50;
+        limit_req_status 429;
+        limit_conn_status 429;
+        proxy_pass https://doh_dns_backend;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_ssl_server_name on;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 90s;
+        proxy_send_timeout 30s;
+        access_log /var/log/nginx/doh_detailed.log doh_detailed;
+        access_log /var/log/nginx/metrics/doh.log node2_metrics;
+    }
+
+    location = /v1/chat/completions {
+        limit_conn xhttp_conn 256;
+        limit_conn_status 429;
+        proxy_pass http://xhttp_3xui_backend;
+        proxy_connect_timeout 5s;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Trusted-Proxy 1;
+        access_log /var/log/nginx/metrics/xhttp.log node2_metrics;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_request_buffering off;
+        #proxy_request_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        send_timeout 300s;
+        client_max_body_size 0;
+        client_body_timeout 300s;
+        keepalive_timeout 30s;
+        access_log /var/log/nginx/xhttp_access.log xhttp_detailed buffer=256k flush=5s;
+    }
+    location ^~ /v1/chat/completions/ {
+        limit_conn xhttp_conn 256;
+        limit_conn_status 429;
+        proxy_pass http://xhttp_3xui_backend;
+        proxy_connect_timeout 5s;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Trusted-Proxy 1;
+        proxy_set_header X-Forwarded-Host $host;
+        access_log /var/log/nginx/metrics/xhttp.log node2_metrics;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_request_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 300s;
+        proxy_send_timeout 300s;
+        send_timeout 300s;
+        client_max_body_size 0;
+        client_body_timeout 300s;
+        keepalive_timeout 30s;
+        access_log /var/log/nginx/xhttp_access.log xhttp_detailed buffer=256k flush=5s;
+    }
+
+    # Static panel assets keep Basic Auth but bypass request/connection rate limits.
+    location ~* ^/__XUI_PANEL_PATH__/.*\.(?:js|css|map|webmanifest|json|png|jpg|jpeg|gif|svg|ico|woff2?)$ {
+        proxy_pass http://127.0.0.1:2053;
+        proxy_http_version 1.1;
+        auth_basic "Restricted";
+        auth_basic_user_file /etc/nginx/.panel-auth;
+        access_log /var/log/nginx/metrics/xui_panel.log node2_metrics;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Connection "upgrade";
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+        #proxy_request_buffering off;
+        proxy_request_buffering off;
+    }
+    location /__XUI_PANEL_PATH__/ {
+        auth_basic "Restricted";
+        auth_basic_user_file /etc/nginx/.panel-auth;
+        access_log /var/log/nginx/panel_access.log panel_security;
+        access_log /var/log/nginx/metrics/xui_panel.log node2_metrics;
+        limit_req zone=panel_auth burst=30 nodelay;
+        limit_conn panel_conn 40;
+        limit_req_dry_run on;
+        limit_conn_dry_run on;
+        limit_req_log_level notice;
+        limit_conn_log_level notice;
+        limit_req_status 429;
+        limit_conn_status 429;
+        proxy_pass http://127.0.0.1:2053;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_read_timeout 3600s;
+        proxy_send_timeout 3600s;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        #proxy_request_buffering off;
+    }
+    location = /__DNS_PANEL_PATH__ { allow __DNS_ALLOWED_CIDR__; deny all; return 301 /__DNS_PANEL_PATH__/; }
+    location ^~ /__DNS_PANEL_PATH__/ {
+        allow __DNS_ALLOWED_CIDR__;
+        deny all;
+        proxy_pass http://127.0.0.1:5380/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto https;
+        proxy_set_header X-Forwarded-Host $host;
+        proxy_set_header X-Forwarded-Prefix /__DNS_PANEL_PATH__;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+        proxy_redirect ~^https?://127.0.0.1:5380/(.*)$ /__DNS_PANEL_PATH__/$1;
+        proxy_read_timeout 3600s;
+        proxy_buffering off;
+        proxy_request_buffering off;
+        #proxy_request_buffering off;
+    }
+    location ^~ /downloads/ {
+        alias /var/www/ai/downloads/;
+        autoindex off;
+        sendfile on;
+        tcp_nopush on;
+        aio threads;
+        directio 8m;
+        output_buffers 2 1m;
+        keepalive_timeout 60s;
+        types { application/octet-stream iso; }
+        access_log /var/log/nginx/downloads_access.log download_json;
+    }
+
+    location / {
+        root /var/www/ai;
+        index index.html;
+        try_files $uri $uri/ /index.html;
+    }
+}

@@ -1,0 +1,36 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: dnsserver-pod
+spec:
+  containers:
+    - name: dnsserver
+      image: docker.io/technitium/dns-server:15.6.0@sha256:1045db38fd2f2e4d9578f9168b7eb4862575469ed0ffc79e03f36bdc772a93b5
+      args: ["/etc/dns"]
+      ports:
+        - containerPort: 853
+          protocol: TCP
+        - containerPort: 4443
+          protocol: TCP
+        - containerPort: 5380
+          protocol: TCP
+      volumeMounts:
+        - name: dns-config
+          mountPath: /etc/dns
+        - name: dns-logs
+          mountPath: /var/log/technitium/dns
+    - name: dnsserver-panel-proxy
+      image: docker.io/alpine/socat:latest@sha256:82ad20f6f6e29b91ff33b6662d24063522b1378f08fd8569cd3ab412cac13f50
+      command: ["socat"]
+      args:
+        - TCP-LISTEN:5380,fork,reuseaddr,bind=10.0.2.100
+        - TCP:127.0.0.1:5380
+  volumes:
+    - name: dns-config
+      hostPath:
+        path: /home/doom/dns-config
+        type: Directory
+    - name: dns-logs
+      hostPath:
+        path: /home/doom/dns-logs
+        type: Directory

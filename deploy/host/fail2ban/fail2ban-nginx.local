@@ -1,0 +1,86 @@
+# Installed last as zzz-node2-automation.local. Keep ignoreip in the host's
+# existing DEFAULT section; this overlay never replaces trusted-address policy.
+
+[agent-producer]
+enabled = true
+filter = node2-edge-deny
+logpath = /var/log/nginx/access.log
+backend = auto
+maxretry = 8
+findtime = 10m
+bantime = 30m
+action = nftables-multiport[name=agent-producer, port="80,443", protocol=tcp]
+
+[nginx-webscan]
+enabled = true
+filter = node2-webscan
+logpath = /var/log/nginx/access.log
+backend = auto
+maxretry = 3
+findtime = 10m
+bantime = 1h
+action = nftables-multiport[name=nginx-webscan, port="80,443", protocol=tcp]
+
+[panel-auth]
+enabled = true
+filter = node2-panel-auth
+logpath = /var/log/nginx/panel_access.log
+backend = auto
+maxretry = 8
+findtime = 10m
+bantime = 30m
+action = nftables-multiport[name=panel-auth, port="80,443", protocol=tcp]
+
+[xhttp-overlimit]
+enabled = true
+filter = node2-xhttp-overlimit
+logpath = /var/log/nginx/xhttp_access.log
+backend = auto
+maxretry = 30
+findtime = 5m
+bantime = 5m
+action = nftables-multiport[name=xhttp-overlimit, port="443", protocol=tcp]
+
+[nginx-botsearch]
+enabled = false
+
+[nginx-empty-useragent]
+enabled = false
+
+[panel-dns-auth]
+enabled = false
+
+[panel-rate]
+enabled = false
+
+[panel-slow]
+enabled = false
+
+[xhttp-protection]
+enabled = false
+
+[panel-recidive-30d]
+enabled = false
+
+[panel-recidive-90d]
+enabled = false
+
+[node2-recidive-7d]
+enabled = true
+filter = node2-recidive
+logpath = /var/log/fail2ban.log
+backend = auto
+maxretry = 3
+findtime = 7d
+bantime = 1d
+action = nftables-multiport[name=node2-recidive-7d, port="80,443", protocol=tcp]
+
+[node2-recidive-30d]
+enabled = true
+filter = node2-recidive
+logpath = /var/log/fail2ban.log
+backend = auto
+maxretry = 5
+findtime = 30d
+bantime = 7d
+action = nftables-multiport[name=node2-recidive-30d, port="80,443", protocol=tcp]

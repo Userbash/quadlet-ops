@@ -1,0 +1,396 @@
+// BEGIN NODE2_METRICS_MANAGED
+// Metrics from Nginx's privacy-minimized access logs and the rootless
+// node2-capacity-metrics user service.
+prometheus.remote_write "node2" {
+  endpoint {
+    url = "http://victoria-metrics:8428/api/v1/write"
+  }
+}
+
+prometheus.scrape "alloy_self" {
+  targets = [{"__address__" = "127.0.0.1:12345"}]
+  scrape_interval = "30s"
+  forward_to = [prometheus.remote_write.node2.receiver]
+}
+
+local.file_match "nginx_metrics" {
+  path_targets = [
+    {__path__ = "/var/log/nginx/metrics/nextcloud.log", job = "nginx_metrics", service = "nextcloud"},
+    {__path__ = "/var/log/nginx/metrics/xhttp.log", job = "nginx_metrics", service = "xhttp"},
+    {__path__ = "/var/log/nginx/metrics/doh.log", job = "nginx_metrics", service = "doh"},
+    {__path__ = "/var/log/nginx/metrics/xui_panel.log", job = "nginx_metrics", service = "xui_panel"},
+  ]
+}
+
+loki.source.file "nginx_metrics" {
+  targets    = local.file_match.nginx_metrics.targets
+  forward_to = [loki.process.nginx_metrics.receiver]
+}
+
+local.file_match "nginx_incident" {
+  path_targets = [{
+    __path__ = "/var/log/nginx/incident-correlation/nextcloud.log",
+    job = "nginx_incident",
+    service = "nextcloud",
+  }]
+}
+
+loki.source.file "nginx_incident" {
+  targets    = local.file_match.nginx_incident.targets
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.process "nginx_metrics" {
+  forward_to = [loki.write.local.receiver]
+
+  stage.json {
+    expressions = {
+      status = "status",
+      request_time = "request_time",
+      request_length = "request_length",
+      bytes_sent = "bytes_sent",
+      limit_req = "limit_req",
+      limit_conn = "limit_conn",
+    }
+  }
+
+  stage.labels {
+    values = {
+      status = "",
+      limit_req = "",
+      limit_conn = "",
+    }
+  }
+
+  stage.metrics {
+    metric.counter {
+      name = "nginx_http_requests_total"
+      prefix = "node2_"
+      description = "Completed Nginx requests by service, status, and limit decision"
+      source = "status"
+      action = "inc"
+      max_idle_duration = "1h"
+    }
+
+    metric.histogram {
+      name = "nginx_request_duration_seconds"
+      prefix = "node2_"
+      description = "Completed Nginx request duration"
+      source = "request_time"
+      buckets = [0.1, 0.25, 0.5, 1, 2, 5, 10, 30, 60, 120, 300, 3600]
+      max_idle_duration = "1h"
+    }
+
+    metric.histogram {
+      name = "nginx_request_body_bytes"
+      prefix = "node2_"
+      description = "Incoming Nginx request size including headers"
+      source = "request_length"
+      buckets = [1024, 16384, 1048576, 10485760, 104857600, 1073741824, 10737418240, 68719476736]
+      max_idle_duration = "1h"
+    }
+
+    metric.histogram {
+      name = "nginx_response_body_bytes"
+      prefix = "node2_"
+      description = "Nginx response body size"
+      source = "bytes_sent"
+      buckets = [1024, 16384, 1048576, 10485760, 1073741824, 10737418240, 68719476736]
+      max_idle_duration = "1h"
+    }
+  }
+}
+
+loki.source.journal "node2_capacity_metrics" {
+  matches    = "SYSLOG_IDENTIFIER=node2-capacity-metrics"
+  max_age    = "24h"
+  path       = "/var/log/journal"
+  labels     = {job = "node2_metrics", instance = "node2"}
+  forward_to = [loki.process.node2_capacity_metrics.receiver]
+}
+
+loki.process "node2_capacity_metrics" {
+  forward_to = [loki.write.local.receiver]
+
+  stage.json {
+    expressions = {
+      cpu_busy_ratio = "cpu_busy_ratio",
+      cpu_iowait_ratio = "cpu_iowait_ratio",
+      cpu_sample_valid = "cpu_sample_valid",
+      memory_total_bytes = "memory_total_bytes",
+      memory_available_bytes = "memory_available_bytes",
+      load1 = "load1",
+      root_size_bytes = "root_size_bytes",
+      root_used_bytes = "root_used_bytes",
+      root_available_bytes = "root_available_bytes",
+      nextcloud_storage_up = "nextcloud_storage_up",
+      nextcloud_size_bytes = "nextcloud_size_bytes",
+      nextcloud_used_bytes = "nextcloud_used_bytes",
+      nextcloud_available_bytes = "nextcloud_available_bytes",
+      nextcloud_http_up = "nextcloud_http_up",
+      nextcloud_container_running = "nextcloud_container_running",
+      nextcloud_container_stats_up = "nextcloud_container_stats_up",
+      nextcloud_container_cpu_ratio = "nextcloud_container_cpu_ratio",
+      nextcloud_container_memory_bytes = "nextcloud_container_memory_bytes",
+      xui_container_running = "xui_container_running",
+      xui_container_stats_up = "xui_container_stats_up",
+      xui_container_cpu_ratio = "xui_container_cpu_ratio",
+      xui_container_memory_bytes = "xui_container_memory_bytes",
+      nginx_status_up = "nginx_status_up",
+      nginx_active_connections = "nginx_active_connections",
+      nginx_reading_connections = "nginx_reading_connections",
+      nginx_writing_connections = "nginx_writing_connections",
+      nginx_waiting_connections = "nginx_waiting_connections",
+      nginx_accepted_connections = "nginx_accepted_connections",
+      nginx_handled_connections = "nginx_handled_connections",
+      nginx_total_requests = "nginx_total_requests",
+      nginx_connection_capacity = "nginx_connection_capacity",
+      nginx_established_443 = "nginx_established_443",
+      nginx_syn_recv_443 = "nginx_syn_recv_443",
+      tcp_listen_overflows_total = "tcp_listen_overflows_total",
+      tcp_listen_drops_total = "tcp_listen_drops_total",
+      tcp_syncookies_sent_total = "tcp_syncookies_sent_total",
+      tcp_backlog_drops_total = "tcp_backlog_drops_total",
+      conntrack_entries = "conntrack_entries",
+      conntrack_limit = "conntrack_limit",
+    }
+  }
+
+  stage.metrics {
+    metric.gauge {
+      name = "cpu_busy_ratio"
+      prefix = "node2_"
+      source = "cpu_busy_ratio"
+      action = "set"
+    }
+    metric.gauge {
+      name = "cpu_iowait_ratio"
+      prefix = "node2_"
+      source = "cpu_iowait_ratio"
+      action = "set"
+    }
+    metric.gauge {
+      name = "cpu_sample_valid"
+      prefix = "node2_"
+      source = "cpu_sample_valid"
+      action = "set"
+    }
+    metric.gauge {
+      name = "memory_total_bytes"
+      prefix = "node2_"
+      source = "memory_total_bytes"
+      action = "set"
+    }
+    metric.gauge {
+      name = "memory_available_bytes"
+      prefix = "node2_"
+      source = "memory_available_bytes"
+      action = "set"
+    }
+    metric.gauge {
+      name = "load1"
+      prefix = "node2_"
+      source = "load1"
+      action = "set"
+    }
+    metric.gauge {
+      name = "filesystem_size_bytes"
+      prefix = "node2_root_"
+      source = "root_size_bytes"
+      action = "set"
+    }
+    metric.gauge {
+      name = "filesystem_used_bytes"
+      prefix = "node2_root_"
+      source = "root_used_bytes"
+      action = "set"
+    }
+    metric.gauge {
+      name = "filesystem_available_bytes"
+      prefix = "node2_root_"
+      source = "root_available_bytes"
+      action = "set"
+    }
+    metric.gauge {
+      name = "storage_scrape_success"
+      prefix = "node2_nextcloud_"
+      source = "nextcloud_storage_up"
+      action = "set"
+    }
+    metric.gauge {
+      name = "filesystem_size_bytes"
+      prefix = "node2_nextcloud_"
+      source = "nextcloud_size_bytes"
+      action = "set"
+    }
+    metric.gauge {
+      name = "filesystem_used_bytes"
+      prefix = "node2_nextcloud_"
+      source = "nextcloud_used_bytes"
+      action = "set"
+    }
+    metric.gauge {
+      name = "filesystem_available_bytes"
+      prefix = "node2_nextcloud_"
+      source = "nextcloud_available_bytes"
+      action = "set"
+    }
+    metric.gauge {
+      name = "http_status_up"
+      prefix = "node2_nextcloud_"
+      source = "nextcloud_http_up"
+      action = "set"
+    }
+    metric.gauge {
+      name = "application_container_running"
+      prefix = "node2_nextcloud_"
+      source = "nextcloud_container_running"
+      action = "set"
+    }
+    metric.gauge {
+      name = "application_container_stats_up"
+      prefix = "node2_nextcloud_"
+      source = "nextcloud_container_stats_up"
+      action = "set"
+    }
+    metric.gauge {
+      name = "application_container_cpu_ratio"
+      prefix = "node2_nextcloud_"
+      source = "nextcloud_container_cpu_ratio"
+      action = "set"
+    }
+    metric.gauge {
+      name = "application_container_memory_bytes"
+      prefix = "node2_nextcloud_"
+      source = "nextcloud_container_memory_bytes"
+      action = "set"
+    }
+    metric.gauge {
+      name = "container_running"
+      prefix = "node2_xui_"
+      source = "xui_container_running"
+      action = "set"
+    }
+    metric.gauge {
+      name = "container_stats_up"
+      prefix = "node2_xui_"
+      source = "xui_container_stats_up"
+      action = "set"
+    }
+    metric.gauge {
+      name = "container_cpu_ratio"
+      prefix = "node2_xui_"
+      source = "xui_container_cpu_ratio"
+      action = "set"
+    }
+    metric.gauge {
+      name = "container_memory_bytes"
+      prefix = "node2_xui_"
+      source = "xui_container_memory_bytes"
+      action = "set"
+    }
+    metric.gauge {
+      name = "nginx_status_up"
+      prefix = "node2_"
+      source = "nginx_status_up"
+      action = "set"
+    }
+    metric.gauge {
+      name = "nginx_active_connections"
+      prefix = "node2_"
+      source = "nginx_active_connections"
+      action = "set"
+    }
+    metric.gauge {
+      name = "nginx_reading_connections"
+      prefix = "node2_"
+      source = "nginx_reading_connections"
+      action = "set"
+    }
+    metric.gauge {
+      name = "nginx_writing_connections"
+      prefix = "node2_"
+      source = "nginx_writing_connections"
+      action = "set"
+    }
+    metric.gauge {
+      name = "nginx_waiting_connections"
+      prefix = "node2_"
+      source = "nginx_waiting_connections"
+      action = "set"
+    }
+    metric.gauge {
+      name = "nginx_accepted_connections_total"
+      prefix = "node2_"
+      source = "nginx_accepted_connections"
+      action = "set"
+    }
+    metric.gauge {
+      name = "nginx_handled_connections_total"
+      prefix = "node2_"
+      source = "nginx_handled_connections"
+      action = "set"
+    }
+    metric.gauge {
+      name = "nginx_requests_total"
+      prefix = "node2_"
+      source = "nginx_total_requests"
+      action = "set"
+    }
+    metric.gauge {
+      name = "nginx_connection_capacity"
+      prefix = "node2_"
+      source = "nginx_connection_capacity"
+      action = "set"
+    }
+    metric.gauge {
+      name = "nginx_established_443_connections"
+      prefix = "node2_"
+      source = "nginx_established_443"
+      action = "set"
+    }
+    metric.gauge {
+      name = "nginx_syn_recv_443_connections"
+      prefix = "node2_"
+      source = "nginx_syn_recv_443"
+      action = "set"
+    }
+    metric.gauge {
+      name = "tcp_listen_overflows_total"
+      prefix = "node2_"
+      source = "tcp_listen_overflows_total"
+      action = "set"
+    }
+    metric.gauge {
+      name = "tcp_listen_drops_total"
+      prefix = "node2_"
+      source = "tcp_listen_drops_total"
+      action = "set"
+    }
+    metric.gauge {
+      name = "tcp_syncookies_sent_total"
+      prefix = "node2_"
+      source = "tcp_syncookies_sent_total"
+      action = "set"
+    }
+    metric.gauge {
+      name = "tcp_backlog_drops_total"
+      prefix = "node2_"
+      source = "tcp_backlog_drops_total"
+      action = "set"
+    }
+    metric.gauge {
+      name = "conntrack_entries"
+      prefix = "node2_"
+      source = "conntrack_entries"
+      action = "set"
+    }
+    metric.gauge {
+      name = "conntrack_limit"
+      prefix = "node2_"
+      source = "conntrack_limit"
+      action = "set"
+    }
+  }
+}
+// END NODE2_METRICS_MANAGED

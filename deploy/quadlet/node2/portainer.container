@@ -1,0 +1,19 @@
+[Unit]
+Description=Portainer CE 2.45.1 for rootless doom Podman
+Wants=podman.socket
+After=podman.socket network-online.target
+
+[Container]
+Image=docker.io/portainer/portainer-ce:2.45.1@sha256:4d616db18cfeb5dd41a69c0958bc825c84483ea9cde1106eb82a5d26f3bd8b0e
+ContainerName=portainer
+PublishPort=127.0.0.1:8080:8000
+PublishPort=127.0.0.1:9443:9443
+Volume=%t/podman/podman.sock:/var/run/docker.sock
+Volume=portainer_data:/data
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

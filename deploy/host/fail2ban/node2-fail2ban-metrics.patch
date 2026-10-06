@@ -1,0 +1,23 @@
+--- a/home/doom/observability/config.alloy
++++ b/home/doom/observability/config.alloy
+@@ -137,7 +137,17 @@
+   stage.regex {
+-    expression = `.*\[(?P<jail>nginx-botsearch|panel-auth|panel-rate|sshd)\].*`
++    expression = `.*(?:INFO|NOTICE|WARNING)\s+\[(?P<jail>[A-Za-z][A-Za-z0-9_.-]*)\]\s+(?P<event>Restore Ban|Ban|Unban|Found)\b.*`
+   }
+-  stage.labels {
+-    values = {jail = ""}
++  stage.labels {
++    values = {jail = "", event = ""}
+   }
++  stage.metrics {
++    metric.counter {
++      name = "fail2ban_jail_events_total"
++      prefix = "node2_"
++      description = "Fail2Ban Ban, Unban, and Found events by jail; source IP is not a label"
++      source = "event"
++      action = "inc"
++      max_idle_duration = "24h"
++    }
++  }
+ }

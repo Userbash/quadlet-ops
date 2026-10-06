@@ -1,0 +1,5 @@
+[Volume]
+VolumeName=open-webui_open-webui-data
+
+[Install]
+WantedBy=default.target

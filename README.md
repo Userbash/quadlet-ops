@@ -1,26 +1,26 @@
-# Node2 Ops Kit
+# Node2 Quadlet Ops
 
-Node2 Ops Kit is a small set of Bash and fish scripts for preparing and maintaining a Debian or Ubuntu server. It installs a minimal host baseline, prepares a dedicated rootless Podman account, deploys Portainer as a systemd-managed container, and provides separate backup, restore, validation, and activation commands.
+Node2 Quadlet Ops prepares and maintains a Debian or Ubuntu server with host Nginx/Fail2Ban and rootless Podman Quadlet services owned by `doom`. The explicit `node2-full` profile includes Portainer, 3X-UI, Nextcloud, DNS, Open WebUI, Qdrant, Loki, Alloy, VictoriaMetrics, and metric collection.
 
-**Suggested GitHub repository:** `node2-ops-kit`
+**Suggested GitHub repository:** `quadlet-ops`
 
-**GitHub description:** `Readable automation for bootstrapping a Debian/Ubuntu server, preparing rootless Podman, deploying Portainer, and managing reviewed host configuration over SSH.`
+**GitHub description:** `Rootless Podman Quadlet deployment and operations for Node2, with Nginx, Fail2Ban, monitoring, and configuration backups.`
 
-The project is deliberately plain: SSH, shell scripts, systemd, Quadlet, and text configuration. Every command that writes to a server requires `DEPLOY_CONFIRM=YES`. Bootstrap and deployment do not configure SSH, DNS, TLS, or firewall policy.
+The project is deliberately plain: SSH, shell scripts, systemd, Quadlet, and text configuration. Every command that writes to a server requires `DEPLOY_CONFIRM=YES`. Bootstrap does not configure SSH, DNS, or firewall policy; the separate web stage obtains TLS certificates after DNS is ready.
 
 ## Capabilities
 
-- Installs Nginx, Fail2Ban, Podman, Podman Compose, and rootless-container prerequisites on Debian or Ubuntu.
+- Installs Nginx, Fail2Ban, Podman, and rootless-container prerequisites on Debian or Ubuntu.
 - Creates the unprivileged `doom` service account, provisions subordinate UID/GID ranges, enables a lingering user systemd manager, and starts the rootless Podman socket.
-- Deploys Portainer CE using a rootless Podman Quadlet unit, persistent host storage, automatic systemd startup, and a localhost-only HTTPS listener.
-- Installs and starts additional reviewed `.container` Quadlet definitions from `deploy/` with the same rootless service account and systemd lifecycle.
+- Deploys a node2-only Quadlet profile from `deploy/quadlet/node2/`; node1 Alloy and duplicate Portainer definitions are not selected.
+- Builds 3X-UI 3.9.0 from a pinned upstream commit as `doom`, since the live `localhost` image is not present on a clean VPS.
+- Installs Alloy, Loki, Nextcloud PHP/Redis settings, DNS collector code, and user systemd metric jobs without copying application databases or user files.
 - Provides staged bootstrap, stack deployment, verification, backup, and rollback procedures in [Deployment Stages](docs/DEPLOYMENT_STAGES.md).
 - Configures an Nginx download site, JSON range-aware access logs, Certbot/Let's Encrypt certificates, and Fail2Ban jails after DNS is ready.
-- Generates Portainer's initial administrator password on the target and stores the credentials outside the repository with restrictive permissions.
 - Enables unattended security-only APT updates; normal package updates and container image updates remain explicit operations.
 - Creates timestamped server backups and SHA-256 manifests; validates the manifest before restore.
 - Restores reviewed configuration separately from service activation.
-- Runs read-only Nginx, Fail2Ban, Podman Compose, and Alloy validation where their configuration is present.
+- Runs read-only Nginx, Fail2Ban, Quadlet service, and Alloy validation where their configuration is present.
 - Keeps the host-level and container-level responsibilities separate: Nginx and Fail2Ban run on the host; containers run as `doom`.
 - Runs shell checks, scans public files for obvious secrets, and packages a public bundle in GitHub Actions.
 
@@ -28,7 +28,8 @@ The project is deliberately plain: SSH, shell scripts, systemd, Quadlet, and tex
 
 - Portainer manages Podman through Podman's Docker-compatible API. Portainer's current documentation says rootless Podman may work but is not officially supported, and its documented supported baseline is rootful Podman 5 on CentOS 9. This project's Debian/Ubuntu plus rootless setup is therefore an optional, best-effort Portainer configuration, not a vendor-supported combination. See [Portainer's Podman requirements](https://docs.portainer.io/admin/environments/add/podman) and [Podman socket instructions](https://docs.portainer.io/admin/environments/add/podman/socket).
 - The Portainer listener binds to `127.0.0.1:9443`. Reach it through an SSH tunnel unless you deliberately configure a reviewed TLS reverse proxy.
-- The repository contains the platform bootstrap and Portainer unit, not application manifests for Nextcloud, 3x-ui, Open WebUI, or other workloads. Add and review each workload's Quadlet manifest and server-side secret files before deploying it.
+- A clean deployment generates new Nextcloud credentials and empty service data directories. User databases, uploads, DNS zones, Portainer state, 3X-UI database/certificates, TLS private keys, API tokens, and `.env` files are never copied from node2.
+- The 3X-UI admin base path must be aligned with `NODE2_XUI_PANEL_PATH` after first-run setup; the live panel database is intentionally excluded. DNS-panel access defaults to loopback until a trusted CIDR is configured.
 - Backups do not include live database contents, user uploads, or container storage. Define a separate tested backup and retention plan for application data.
 - Firewall rules, SSH policy, DNS, TLS issuance, and cloud-provider networking are intentionally not changed by scripts.
 
@@ -48,16 +49,16 @@ chmod 600 .env
 ./scripts/check-local.fish
 ```
 
-Set `NODE2_HOST` in `.env`, or pass a host to a script. The default is `node2`. Keep an SSH identity loaded in OpenSSH or configure it in `~/.ssh/config`.
+Set `NODE2_HOST` in `.env`, or pass a host to a script. The default is `node2`. Keep an SSH identity loaded in OpenSSH or configure it in `~/.ssh/config`. Before running a deployment command, verify the server host-key fingerprint through an independent channel and add the verified key to `~/.ssh/known_hosts`; scripts reject unknown host keys.
 
 ## Fresh Server Setup
 
-Read [Fresh Installation](docs/FRESH_INSTALL.md) before changing a server. In brief, bootstrap and Portainer deployment are separate, confirmed actions:
+Read [Fresh Installation](docs/FRESH_INSTALL.md) before changing a server. Bootstrap, the explicit Quadlet profile, and host Nginx/TLS are separate confirmed stages:
 
 ```fish
 set -lx DEPLOY_CONFIRM YES
 ./scripts/bootstrap-node2.fish root@new-server
-./scripts/deploy-node2.fish root@new-server
+./scripts/deploy-stack.fish root@new-server node2-full
 ```
 
 After deployment, create an SSH tunnel and open `https://localhost:9443`:
@@ -68,7 +69,7 @@ ssh -N -L 9443:127.0.0.1:9443 root@new-server
 
 The Portainer service runs under the `doom` user and is started by its user systemd manager after reboot. The application UI is not exposed on a public interface.
 
-To deploy another reviewed container unit, add `deploy/SERVICE_NAME.container` and run `./scripts/deploy-node2.fish root@new-server SERVICE_NAME`. The command installs it under `doom`'s Quadlet directory, reloads the user manager, enables and starts `SERVICE_NAME.service`, and verifies that systemd reports it active. Prepare required secrets and data paths on the host first.
+To deploy one reviewed service, add `deploy/quadlet/node2/SERVICE_NAME.container` and run `./scripts/deploy-node2.fish root@new-server SERVICE_NAME`. The command installs the selected node2 unit and shared network/volume files, starts its generated service, and verifies that systemd reports it active.
 
 After DNS points to the server, configure Nginx, request the Let's Encrypt certificate, and enable the Fail2Ban Nginx jails:
 
@@ -79,7 +80,7 @@ set -lx DEPLOY_CONFIRM YES
 
 The web configuration requires real `NODE2_DOMAIN` and `LETSENCRYPT_EMAIL` values in `.env`. It first serves the ACME challenge over HTTP, requests the certificate with Certbot, then installs the HTTPS configuration. Nginx writes `$http_range` and `$sent_http_content_range` to a JSON access log for download analysis.
 
-Bootstrap creates a random Portainer admin password on the target. The generated credentials are stored in `/home/doom/portainer/secrets/admin-credentials.txt` with mode `0600` and are never copied into the repository or printed by the scripts. Read them once through a protected root session and rotate them in Portainer after initial setup.
+Portainer initializes its administrator during first access. Complete that setup through the SSH tunnel and store the credentials in a password manager.
 
 ## Backup and Recovery
 
@@ -110,7 +111,12 @@ Copy `.env.example` to `.env`, keep it mode `600`, and only add trusted shell as
 | `NODE2_SSH_KEY` | Optional SSH private-key path | OpenSSH default |
 | `NODE2_DOMAIN` | DNS name for the Nginx site and certificate | required for `configure-web` |
 | `LETSENCRYPT_EMAIL` | ACME account email | required for `configure-web` |
-| `NODE2_WEB_ROOT` | Host web root for downloads and ACME challenges | `/var/www/node2` |
+| `NODE2_WEB_ROOT` | Host ACME challenge root | `/var/www/node2` |
+| `NODE2_XUI_PANEL_PATH` | Random 3X-UI URL path, also set in panel on first run | required for `configure-web` |
+| `NODE2_DNS_PANEL_PATH` | Random DNS panel URL path | required for `configure-web` |
+| `NODE2_DNS_ALLOWED_CIDR` | Trusted source network for DNS panel | defaults to localhost only |
+| `NODE2_PANEL_USER` | Nginx Basic Auth user for 3X-UI | required for `configure-web` |
+| `NODE2_PANEL_PASSWORD` | Nginx Basic Auth password, 20+ characters | required for `configure-web` |
 | `BACKUP_ROOT` | Local destination for timestamped backups | `backups` |
 | `DEPLOY_CONFIRM` | Required `YES` for bootstrap, deployment, restore, and activation | `NO` |
 
@@ -121,10 +127,14 @@ Never commit `.env`, credentials, keys, certificates, databases, logs, or backup
 ```text
 scripts/                  Operator-side Bash and fish commands
 scripts/lib/common.sh     Shared SSH, environment, and confirmation helpers
-deploy/                   Quadlet definitions installed on the server
-deploy/nginx-node2.conf   HTTPS site with range-aware JSON access logging
-deploy/fail2ban-nginx.local Nginx authentication and bot jails
-docs/FRESH_INSTALL.md     Clean-host setup from prerequisites to Portainer
+deploy/quadlet/node2/     Rootless Quadlet manifest set for node2
+deploy/quadlet/node1/     Node1-only manifests, excluded from node2 profile
+deploy/config/            Alloy, Loki, Nextcloud, DNS collector config/code
+deploy/host/nginx/        Host reverse-proxy template, logs, patches
+deploy/host/fail2ban/     Host Fail2Ban filters and overlays
+deploy/profiles/          Explicit deployment service lists
+deploy/systemd/user/      Rootless user metrics timers/services
+docs/FRESH_INSTALL.md     Clean-host setup and first-run service initialization
 docs/QUADLET.md           Quadlet INI units, generated services, and extension rules
 docs/DEPLOYMENT_STAGES.md Complete preparation and deployment lifecycle
 docs/ARCHITECTURE.md      Host, user, container, and network boundaries
@@ -142,7 +152,7 @@ fish -n scripts/*.fish
 git diff --check
 ```
 
-The GitHub Actions workflow runs these syntax checks, scans files for obvious secret patterns, and creates a bundle without `.env` files or local backups. It never deploys to a production host.
+GitHub Actions also validates Nginx and Fail2Ban configurations on a disposable runner, parses Quadlet manifests without starting them, and smoke-tests Alloy-to-Loki ingestion in temporary containers. It scans for common accidental secret patterns and creates a configuration-only artifact without `.env` files or local backups. The workflow has no deployment job, SSH credentials, or production secrets; see [CI checks](docs/CI.md).
 
 ## License
 

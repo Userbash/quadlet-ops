@@ -1,0 +1,21 @@
+--- a/etc/nginx/sites-enabled/terranex.conf
++++ b/etc/nginx/sites-enabled/terranex.conf
+@@ -63,1 +63,3 @@
+     add_header Strict-Transport-Security "max-age=15552000; includeSubDomains" always;
++    # node2 metrics omit request paths, client addresses, and headers.
++    access_log /var/log/nginx/metrics/nextcloud.log node2_metrics;
+@@ -118,1 +120,2 @@
+         access_log /var/log/nginx/doh_detailed.log doh_detailed;
++        access_log /var/log/nginx/metrics/doh.log node2_metrics;
+@@ -131,1 +134,2 @@
+         proxy_set_header X-Trusted-Proxy 1;
++        access_log /var/log/nginx/metrics/xhttp.log node2_metrics;
+@@ -156,1 +160,2 @@
+         proxy_set_header X-Forwarded-Host $host;
++        access_log /var/log/nginx/metrics/xhttp.log node2_metrics;
+@@ -175,1 +180,2 @@
+         auth_basic_user_file /etc/nginx/.panel-auth;
++        access_log /var/log/nginx/metrics/xui_panel.log node2_metrics;
+@@ -192,1 +198,2 @@
+         access_log /var/log/nginx/panel_access.log panel_security;
++        access_log /var/log/nginx/metrics/xui_panel.log node2_metrics;

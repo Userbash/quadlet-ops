@@ -1,10 +1,10 @@
 # Deployment Stages
 
-This document defines the complete preparation and deployment lifecycle for Node2 Ops Kit. It is written for a clean Debian or Ubuntu host and keeps application containers rootless under the `doom` user. Container deployment is Quadlet-only: every deployed container must have a reviewed `deploy/SERVICE_NAME.container` INI file.
+This document defines the deployment lifecycle for a clean Debian or Ubuntu host. Application containers run rootless under `doom`. Node2 Quadlets live in `deploy/quadlet/node2`, node1-only units live in `deploy/quadlet/node1`, and the explicit profile is `deploy/profiles/node2-full.units`.
 
 ## Stage 0: Scope and Preconditions
 
-Before touching a server, record the target hostname, domain, operator SSH key, provider firewall rules, required applications, persistent data paths, and rollback plan. The current repository contains one production container unit, `portainer.container`; other application units must be added and reviewed before deployment.
+Before touching a server, record the target hostname, domain, operator SSH key, provider firewall rules, required applications, persistent data paths, and rollback plan. The repository contains reviewed Quadlet definitions for the Node2 workloads; each target installation still requires a host-specific review of paths, secrets, and ports.
 
 Required preconditions:
 
@@ -13,7 +13,7 @@ Required preconditions:
 - Provider firewall rules that allow SSH and, when needed, HTTP/HTTPS. Portainer remains loopback-only.
 - Real `NODE2_DOMAIN` and `LETSENCRYPT_EMAIL` values before the web stage.
 
-Acceptance: `ssh root@HOST true` succeeds without an interactive password prompt and the intended host identity is confirmed.
+Before the first deployment, verify the SSH host-key fingerprint through the provider console or another independent channel and add it to the operator's `known_hosts`. The scripts reject unknown host keys. Acceptance: `ssh root@HOST true` succeeds without an interactive password prompt and the returned host key matches the independently verified fingerprint.
 
 ## Stage 1: Operator Workspace
 
@@ -23,7 +23,7 @@ chmod 600 .env
 ./scripts/check-local.fish
 ```
 
-Set `NODE2_HOST`, `NODE2_USER`, `NODE2_SSH_KEY`, `NODE2_DOMAIN`, `LETSENCRYPT_EMAIL`, and `NODE2_WEB_ROOT` in `.env`. Do not place passwords, tokens, private keys, or certificates in this file.
+Set the required `NODE2_*`, domain, panel path, and auth variables in `.env`; keep it mode `600` and out of Git. Never put private keys, certificates, or service data there.
 
 Acceptance: local Bash and fish prerequisites pass; `.env` is mode `600`.
 
@@ -34,7 +34,7 @@ set -lx DEPLOY_CONFIRM YES
 ./scripts/bootstrap-node2.fish root@HOST
 ```
 
-Bootstrap installs the host packages needed by the platform, creates or verifies `/home/doom`, allocates subordinate UID/GID ranges, prepares directories, enables user lingering, starts the `doom` user manager, starts rootless `podman.socket`, creates `portainer_data`, generates the Portainer password files, and starts host Nginx and Fail2Ban.
+Bootstrap installs the host packages needed by the platform, creates or verifies `/home/doom`, allocates subordinate UID/GID ranges, prepares directories, enables user lingering, starts the `doom` user manager and rootless `podman.socket`, creates `portainer_data`, and starts host Nginx and Fail2Ban.
 
 Acceptance:
 
@@ -45,14 +45,14 @@ ssh root@HOST 'uid=$(id -u doom); runuser -u doom -- env HOME=/home/doom XDG_RUN
 
 ## Stage 3: Quadlet Runtime
 
-Every container is represented by an INI file under `deploy/`. The unit is copied to `/home/doom/.config/containers/systemd/` and generated into a user systemd service. No `docker compose`, rootful Podman service, or direct `podman run` is used by the deployment path.
+Every container is represented by a Quadlet INI or `.kube` file under `deploy/quadlet/node2/`. The unit is copied to `/home/doom/.config/containers/systemd/` and generated into a user systemd service. No Compose service or rootful Podman service is used by the deployment path.
 
 ```fish
 set -lx DEPLOY_CONFIRM YES
 ./scripts/deploy-stack.fish root@HOST
 ```
 
-`deploy-stack` uploads every `deploy/*.container` file, enables its generated service with `systemctl --user enable --now`, and verifies that all units are active. For Portainer, it also checks the HTTPS API.
+`deploy-stack` uploads only the explicit node2 profile, copies settings without application data, builds pinned 3X-UI source as `doom`, and starts services in dependency order. It does not scan arbitrary deploy files. Host Nginx/TLS, Fail2Ban, and HTTP metric validation remain a separate stage that needs working DNS.
 
 Acceptance: `./scripts/check-stack.fish root@HOST` reports every Quadlet service active.
 
@@ -111,7 +111,7 @@ Verify Nginx configuration, Fail2Ban, user systemd services, Podman containers, 
 ./scripts/backup-node2.fish root@HOST
 ```
 
-The backup includes selected host and application configuration plus container metadata. It does not include container images, Podman storage, databases, uploads, Portainer's named volume data, or Let's Encrypt private keys. Those require separate data backup policies.
+The backup includes an allowlist of host and application configuration. It excludes credentials, auth hashes, certificates/private keys, databases, uploads, DNS zones, logs, caches, images, and named-volume contents. Those require separate protected backup policies.
 
 To roll back a Quadlet unit, restore the previous reviewed INI file, run `deploy-stack` or the selected deployment command, and run `check-stack`. To roll back host configuration, restore a verified archive, run validation, and only then activate services.
 

@@ -1,0 +1,26 @@
+[Unit]
+Description=Technitium DNS statistics collector
+After=dnsserver-quadlet.service
+Requires=dnsserver-quadlet.service
+
+[Container]
+Image=docker.io/library/python:3.12-alpine@sha256:b64631e04e4920160c50fbe8d8df828f7f35f06f425cb44aa09bca53e708a35a
+ContainerName=dns-stats
+Network=host
+User=1000:1000
+UserNS=keep-id
+EnvironmentFile=/home/doom/observability/technitium.env
+Environment=STATS_DIR=/data
+Environment=INTERVAL_SECONDS=3600
+Exec=python3 /opt/collector/technitium_stats_collector.py
+SecurityLabelDisable=true
+Volume=/home/doom/dns-stats:/data:Z
+Volume=/home/doom/observability/technitium_stats_collector.py:/opt/collector/technitium_stats_collector.py:ro,Z
+
+[Service]
+Restart=always
+MemoryMax=64M
+CPUQuota=10%
+
+[Install]
+WantedBy=default.target

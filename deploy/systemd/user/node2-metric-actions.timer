@@ -1,0 +1,12 @@
+[Unit]
+Description=Evaluate node2 workload metrics every minute
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec=1min
+AccuracySec=5s
+RandomizedDelaySec=10s
+Unit=node2-metric-actions.service
+
+[Install]
+WantedBy=timers.target

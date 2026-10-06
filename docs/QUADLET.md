@@ -2,34 +2,35 @@
 
 ## Scope
 
-Quadlet converts Podman unit files into user systemd services. In this repository, the Quadlet runtime belongs to the unprivileged `doom` account. The server bootstrap creates the user systemd manager, enables lingering, starts the rootless Podman socket, and creates the persistent `portainer_data` volume.
+Quadlet converts Podman unit files into user systemd services. The node2 runtime belongs to the unprivileged `doom` account. The server bootstrap creates the user systemd manager, enables lingering, starts the rootless Podman socket, and creates the persistent `portainer_data` volume.
 
-The repository currently contains one container definition:
+Node2 definitions are explicit and isolated from node1-only manifests:
 
 ```text
-deploy/portainer.container -> portainer.service
+deploy/quadlet/node2/*.container -> matching *.service
+deploy/quadlet/node2/dnsserver-quadlet.kube -> dnsserver-quadlet.service
+deploy/quadlet/node1/alloy-node1.container -> excluded from node2 profile
 ```
 
-Nginx and Fail2Ban are host services, not containers. Alloy, Loki, Nextcloud, 3x-ui, Open WebUI, and other application workloads do not have Quadlet definitions in this repository. The activation script can use an externally supplied `observability-compose.yaml`, but that file is not part of the public project.
+Nginx and Fail2Ban are host services, not containers. Alloy, Loki, VictoriaMetrics, Nextcloud, 3X-UI, Open WebUI, DNS, Portainer, and Qdrant use rootless Quadlet definitions under `deploy/quadlet/node2/`.
 
 ## Portainer Container
 
-Source file: [`deploy/portainer.container`](../deploy/portainer.container)
+Source file: [`deploy/quadlet/node2/portainer.container`](../deploy/quadlet/node2/portainer.container)
 
 ```ini
 [Unit]
-Description=Portainer CE for the rootless doom Podman environment
+Description=Portainer CE 2.45.1 for rootless doom Podman
 Wants=podman.socket
 After=podman.socket
 
 [Container]
-Image=docker.io/portainer/portainer-ce:lts
+Image=docker.io/portainer/portainer-ce:2.45.1
 ContainerName=portainer
+PublishPort=127.0.0.1:8080:8000
 PublishPort=127.0.0.1:9443:9443
 Volume=%t/podman/podman.sock:/var/run/docker.sock
 Volume=portainer_data:/data
-Volume=/home/doom/portainer/secrets/admin-password:/run/secrets/portainer-admin-password:ro
-Exec=--admin-password-file /run/secrets/portainer-admin-password
 
 [Service]
 Restart=always
@@ -45,13 +46,12 @@ WantedBy=default.target
 
 ### `[Container]`
 
-- `Image` selects the Portainer CE long-term-support image. The image is pulled on the target and is not stored in Git.
+- `Image` pins the configured Portainer CE version. The image is pulled on the target and is not stored in Git.
 - `ContainerName` gives the container a stable Podman name.
 - `PublishPort=127.0.0.1:9443:9443` keeps Portainer private to the host. Use an SSH tunnel or a separately reviewed reverse proxy for access.
 - `%t/podman/podman.sock` resolves to the runtime directory of `doom`, for example `/run/user/1001/podman/podman.sock`. It is mounted at `/var/run/docker.sock` because Portainer speaks Podman's Docker-compatible API.
 - `portainer_data:/data` is a rootless named volume created by bootstrap. It holds the Portainer database and configuration.
-- The password hash is mounted read-only from `/home/doom/portainer/secrets/admin-password`. Bootstrap generates the hash and keeps the plaintext credentials in a root-only file outside the repository.
-- `Exec=--admin-password-file ...` passes the initial admin password hash to the Portainer image. It does not place the password in the Quadlet file or the process command line on the operator workstation.
+- Portainer initializes its administrator on first access. Bootstrap does not create or print Portainer credentials.
 
 ### `[Service]`
 
@@ -83,7 +83,7 @@ ssh root@node2 'uid=$(id -u doom); runuser -u doom -- env HOME=/home/doom XDG_RU
 ssh root@node2 'uid=$(id -u doom); runuser -u doom -- env HOME=/home/doom XDG_RUNTIME_DIR=/run/user/$uid podman inspect portainer'
 ```
 
-The project deployment command uploads the selected unit, reloads the user manager, enables it with `systemctl --user enable --now`, and checks its active state. For Portainer it also waits for `https://127.0.0.1:9443/api/status` to respond.
+The project deployment command uploads the selected unit, reloads the user manager, restarts the generated service, and checks its active state. Quadlet's `WantedBy=default.target` attaches it to the user default target; lingering starts that target after reboot. Portainer deployment waits for its HTTPS API, and SocratiCode Qdrant deployment waits for `http://127.0.0.1:6333/readyz`.
 
 ```fish
 set -lx DEPLOY_CONFIRM YES
@@ -95,7 +95,7 @@ set -lx DEPLOY_CONFIRM YES
 Add one reviewed file per workload under `deploy/`:
 
 ```text
-deploy/SERVICE_NAME.container
+deploy/quadlet/node2/SERVICE_NAME.container
 ```
 
 Deploy it with:
@@ -132,7 +132,8 @@ This separation keeps the public Quadlet surface small and makes host access con
 
 ## Publication Checklist
 
-- Confirm every `deploy/*.container` file is intentional and documented.
+- Confirm the service is listed in `deploy/profiles/node2-full.units` if it belongs in the node2 profile.
+- Keep node1-specific units and unused compatibility definitions out of the node2 profile.
 - Confirm no private image registry credentials, passwords, tokens, certificates, or volumes are committed.
 - Verify that each bind-mounted path exists after bootstrap or is created by the deployment process.
 - Check that public ports are loopback or explicitly documented provider-firewall exceptions.

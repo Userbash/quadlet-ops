@@ -1,0 +1,18 @@
+[Unit]
+Description=Open WebUI rootless container
+
+[Container]
+Image=ghcr.io/open-webui/open-webui:main@sha256:6a773e5c3a246b65cbe74ce942b294292c0e5f81c138f703d111bc162f7d7c3d
+ContainerName=open-webui
+PublishPort=127.0.0.1:3000:3000
+Environment=WEBUI_AUTH=true
+Environment=ENABLE_SIGNUP=true
+Environment=PORT=3000
+Volume=open-webui.volume:/app/backend/data
+
+[Service]
+Restart=always
+TimeoutStartSec=600
+
+[Install]
+WantedBy=default.target

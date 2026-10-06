@@ -1,2 +1,3 @@
 #!/usr/bin/env fish
-exec (status dirname)/deploy-stack.sh $argv
+set -l script_dir (dirname (status filename))
+exec "$script_dir/deploy-stack.sh" $argv

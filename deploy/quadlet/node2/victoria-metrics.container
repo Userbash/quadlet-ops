@@ -1,0 +1,19 @@
+[Unit]
+Description=VictoriaMetrics local metrics store
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/victoriametrics/victoria-metrics:v1.153.0@sha256:5eff7af5341e401471002f58d106d399e614a62f3d240f2dbc21901e49eed5dd
+ContainerName=victoria-metrics
+Network=observability.network
+PublishPort=127.0.0.1:8428:8428
+Volume=victoria-metrics-data:/victoria-metrics-data
+Exec=-storageDataPath=/victoria-metrics-data -retentionPeriod=90d -httpListenAddr=:8428
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

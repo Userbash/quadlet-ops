@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect node2 capacity and connection metrics every 30 seconds
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=30s
+AccuracySec=2s
+Unit=node2-capacity-metrics.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,5 @@
+[Network]
+NetworkName=nextcloud
+
+[Install]
+WantedBy=default.target

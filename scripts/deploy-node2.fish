@@ -1,2 +1,3 @@
 #!/usr/bin/env fish
-exec (status dirname)/deploy-node2.sh $argv
+set -l script_dir (dirname (status filename))
+exec "$script_dir/deploy-node2.sh" $argv

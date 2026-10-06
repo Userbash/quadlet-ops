@@ -1,0 +1,27 @@
+[Unit]
+Description=Grafana Alloy node1 to Loki node2
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=docker.io/grafana/alloy:v1.10.2
+ContainerName=alloy-node1
+Network=host
+User=0:0
+PodmanArgs=--group-add=keep-groups
+Volume=/home/alloy/config.alloy:/etc/alloy/config.alloy:ro,Z
+Volume=/home/alloy/data:/var/lib/alloy:Z
+Volume=/var/log/journal:/var/log/journal:ro
+Volume=/run/log/journal:/run/log/journal:ro
+Volume=/etc/machine-id:/etc/machine-id:ro
+Volume=/var/log/fail2ban.log:/var/log/fail2ban.log:ro
+Volume=/var/log/x-ui:/var/log/x-ui:ro,Z
+Exec=run --storage.path=/var/lib/alloy /etc/alloy/config.alloy
+
+[Service]
+Restart=always
+RestartSec=10
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

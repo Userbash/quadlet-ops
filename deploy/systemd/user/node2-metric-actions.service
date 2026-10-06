@@ -1,0 +1,17 @@
+[Unit]
+Description=Evaluate node2 workload metrics and apply guarded recovery actions
+After=victoria-metrics.service alloy.service
+Wants=victoria-metrics.service
+
+[Service]
+Type=oneshot
+ExecStart=/home/doom/observability/bin/node2-metric-actions.sh
+UMask=0077
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=/home/doom/.local/state/node2-metric-actions
+PrivateTmp=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6

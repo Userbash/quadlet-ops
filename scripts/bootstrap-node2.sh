@@ -3,9 +3,12 @@ set -Eeuo pipefail
 [[ $EUID -eq 0 ]] || { echo 'bootstrap must run as root' >&2; exit 1; }
 export DEBIAN_FRONTEND=noninteractive
 apt-get update
-apt-get install -y --no-install-recommends ca-certificates curl git jq nginx fail2ban certbot podman podman-compose uidmap slirp4netns fuse-overlayfs dbus-user-session apache2-utils openssl unattended-upgrades tar gzip acl
+apt-get install -y --no-install-recommends ca-certificates curl git jq nginx fail2ban certbot podman uidmap slirp4netns fuse-overlayfs dbus-user-session apache2-utils openssl unattended-upgrades tar gzip acl logrotate patch iproute2
 id doom >/dev/null 2>&1 || useradd --create-home --shell /bin/bash doom
 [[ $(getent passwd doom | cut -d: -f6) == /home/doom ]] || { echo 'doom must use /home/doom as its home directory' >&2; exit 1; }
+if getent group systemd-journal >/dev/null && ! id -nG doom | tr ' ' '\n' | grep -qx systemd-journal; then
+  usermod -aG systemd-journal doom
+fi
 
 ensure_subid_range() {
   local file=$1 total candidate conflict
@@ -23,18 +26,7 @@ ensure_subid_range() {
 
 ensure_subid_range /etc/subuid
 ensure_subid_range /etc/subgid
-install -d -o doom -g doom -m 0750 /home/doom/observability /home/doom/backups /home/doom/portainer /home/doom/portainer/data /home/doom/portainer/secrets /home/doom/.config /home/doom/.config/containers /home/doom/.config/containers/systemd
-if [[ ! -s /home/doom/portainer/secrets/admin-password ]]; then
-  admin_password=$(openssl rand -hex 24)
-  admin_hash=$(htpasswd -bnBC 12 '' "$admin_password" | cut -d: -f2-)
-  printf '%s\n' "$admin_hash" > /home/doom/portainer/secrets/admin-password
-  credential_key=password
-  printf 'username=admin\n%s=%s\n' "$credential_key" "$admin_password" > /home/doom/portainer/secrets/admin-credentials.txt
-  chown doom:doom /home/doom/portainer/secrets/admin-password
-  chmod 0600 /home/doom/portainer/secrets/admin-password
-  chown root:root /home/doom/portainer/secrets/admin-credentials.txt
-  chmod 0600 /home/doom/portainer/secrets/admin-credentials.txt
-fi
+install -d -o doom -g doom -m 0750 /home/doom/observability /home/doom/backups /home/doom/portainer /home/doom/portainer/data /home/doom/.config /home/doom/.config/containers /home/doom/.config/containers/systemd /home/doom/.config/systemd/user /home/doom/.local/state
 loginctl enable-linger doom
 service_uid=$(id -u doom)
 runtime_dir=/run/user/$service_uid

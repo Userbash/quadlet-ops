@@ -1,0 +1,25 @@
+[Unit]
+Description=3X-UI 3.9.0 rootless container
+After=network-online.target
+Wants=network-online.target
+
+[Container]
+Image=localhost/3x-ui:3.9.0
+ContainerName=3xui_app
+AddCapability=NET_ADMIN
+AddCapability=NET_RAW
+Environment=XRAY_VMESS_AEAD_FORCED=false
+Environment=XUI_ENABLE_FAIL2BAN=false
+Environment=XUI_PORT=2053
+Volume=/home/doom/3x-ui/db:/etc/x-ui:Z
+Volume=/home/doom/3x-ui/cert:/root/cert:Z
+Volume=/home/doom/3x-ui/acme:/root/.acme.sh:Z
+PublishPort=127.0.0.1:2053:2053
+PublishPort=127.0.0.1:8082:8082
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

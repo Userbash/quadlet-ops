@@ -1,0 +1,16 @@
+# Explicit node2 profile. Keep node1 units and duplicate/experimental manifests out.
+portainer
+victoria-metrics
+loki
+alloy
+socraticode-qdrant
+3xui
+open-webui
+nextcloud-db
+nextcloud-redis
+nextcloud-rabbitmq
+nextcloud-app
+nextcloud-cron
+dnsserver-quadlet
+dns-stats
+query-events

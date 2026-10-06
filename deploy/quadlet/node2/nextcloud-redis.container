@@ -1,0 +1,20 @@
+[Unit]
+Description=Nextcloud Redis
+After=nextcloud-network.service
+Requires=nextcloud-network.service
+
+[Container]
+Image=docker.io/library/redis:7-alpine@sha256:ff02b58f971e7d7d156a1267e283fcbbeee91773b6aa36c49dac28ecfe28eadf
+ContainerName=nextcloud-redis
+Network=nextcloud.network
+PodmanArgs=--network-alias=redis
+EnvironmentFile=/home/doom/nextcloud/.env
+Volume=/home/doom/bin/redis-entrypoint.sh:/usr/local/bin/redis-entrypoint.sh:ro
+Exec=/usr/local/bin/redis-entrypoint.sh
+Volume=/home/doom/nextcloud/redis:/data:Z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

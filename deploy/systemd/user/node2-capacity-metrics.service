@@ -1,0 +1,8 @@
+[Unit]
+Description=Collect aggregate node2 capacity metrics
+
+[Service]
+Type=oneshot
+SyslogIdentifier=node2-capacity-metrics
+EnvironmentFile=/home/doom/observability/node2.env
+ExecStart=/home/doom/observability/bin/collect-node2-metrics.sh

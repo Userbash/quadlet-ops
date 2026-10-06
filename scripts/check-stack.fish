@@ -1,2 +1,3 @@
 #!/usr/bin/env fish
-exec (status dirname)/check-stack.sh $argv
+set -l script_dir (dirname (status filename))
+exec "$script_dir/check-stack.sh" $argv

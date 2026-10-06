@@ -1,0 +1,20 @@
+[Unit]
+Description=Technitium DNS Quadlet pod
+Wants=network-online.target
+After=network-online.target
+
+[Kube]
+Yaml=/home/doom/dnsserver-kube.yaml
+Network=slirp4netns:allow_host_loopback=true
+PublishPort=127.0.0.1:853:853/tcp
+PublishPort=127.0.0.1:4443:4443/tcp
+PublishPort=127.0.0.1:5380:5380/tcp
+UserNS=host
+
+[Service]
+Restart=always
+TimeoutStartSec=120
+TimeoutStopSec=30
+
+[Install]
+WantedBy=default.target

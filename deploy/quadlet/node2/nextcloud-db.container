@@ -1,0 +1,19 @@
+[Unit]
+Description=Nextcloud PostgreSQL
+After=nextcloud-network.service
+Requires=nextcloud-network.service
+
+[Container]
+Image=docker.io/library/postgres:16-alpine@sha256:cf78e76683b9ca8c5733cbbdce6c9262b45b6767934dd0a95e671f9a0fc20685
+ContainerName=nextcloud-db
+Network=nextcloud.network
+PodmanArgs=--network-alias=db
+EnvironmentFile=/home/doom/nextcloud/.env
+Environment=PGDATA=/var/lib/postgresql/data/pgdata
+Volume=/home/doom/nextcloud/db:/var/lib/postgresql/data:Z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

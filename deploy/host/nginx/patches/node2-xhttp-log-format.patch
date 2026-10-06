@@ -1,0 +1,11 @@
+--- a/etc/nginx/conf.d/xhttp-hardening.conf
++++ b/etc/nginx/conf.d/xhttp-hardening.conf
+@@ -1,6 +1,6 @@
+ # XHTTP observability and soft per-IP concurrency guard
+ limit_conn_zone $binary_remote_addr zone=xhttp_conn:10m;
+ log_format xhttp_detailed '$remote_addr [$time_iso8601] "$request" method=$request_method '
+-                          'status=$status bytes=$body_bytes_sent request_time=$request_time '
++                          'status=$status limit_conn=$limit_conn_status bytes=$body_bytes_sent request_time=$request_time '
+                           'upstream_response_time=$upstream_response_time upstream_status=$upstream_status '
+                           'connection=$connection connection_requests=$connection_requests '
+                           'referer="$http_referer" ua="$http_user_agent"';

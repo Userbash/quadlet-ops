@@ -1,0 +1,32 @@
+[Unit]
+Description=Nextcloud application
+Requires=nextcloud-db.service nextcloud-redis.service nextcloud-rabbitmq.service
+After=nextcloud-db.service nextcloud-redis.service nextcloud-rabbitmq.service
+
+[Container]
+Image=docker.io/library/nextcloud:34-apache@sha256:37b109885aa3cba3e056362a899556a625c986f2c17cd2c0cc157d21c789f53b
+ContainerName=nextcloud-app
+Network=nextcloud.network
+PodmanArgs=--network-alias=app
+EnvironmentFile=/home/doom/nextcloud/.env
+Environment=POSTGRES_HOST=db
+Environment=REDIS_HOST=redis
+EnvironmentFile=/home/doom/nextcloud/site.env
+Environment=OVERWRITEPROTOCOL=https
+Environment=TRUSTED_PROXIES=127.0.0.1
+Environment=PHP_MEMORY_LIMIT=1024M
+Environment=PHP_UPLOAD_LIMIT=64G
+Environment=APACHE_BODY_LIMIT=0
+Volume=/home/doom/nextcloud/app:/var/www/html:Z
+Volume=/home/doom/nextcloud/data:/var/www/html/data:Z
+Volume=/home/doom/nextcloud/config:/var/www/html/config:Z
+Volume=/home/doom/nextcloud/custom_apps:/var/www/html/custom_apps:Z
+Volume=/home/doom/nextcloud/php.ini:/usr/local/etc/php/conf.d/zz-nextcloud.ini:ro,Z
+Volume=/etc/localtime:/etc/localtime:ro
+PublishPort=127.0.0.1:8081:80
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,91 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 3 * * *'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  static:
+    name: Static checks
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install linters
+        run: sudo apt-get update && sudo apt-get install -y fish shellcheck
+      - name: Syntax and repository checks
+        run: |
+          bash -n scripts/*.sh scripts/lib/*.sh tests/ci/*.sh
+          fish -n scripts/*.fish
+          shellcheck --severity=error scripts/*.sh scripts/lib/*.sh tests/ci/*.sh
+          git diff --check
+          bash tests/ci/static-checks.sh
+      - name: Scan public files for obvious secrets
+        shell: bash
+        run: |
+          if grep -RIlE '(/etc/shadow|BEGIN (RSA|OPENSSH|EC|PRIVATE)|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9]{20,}|Bearer[[:space:]]+[A-Za-z0-9._-]{20,}|(^|[[:space:]])(password|token|secret)[[:space:]]*=[[:space:]]*[^$<][^[:space:]]{7,})' . --exclude-dir=.git --exclude-dir=backups --exclude-dir=secrets --exclude='*.md' --exclude='.env' --exclude='*.example' --exclude=ci.yml; then
+            echo 'Potential secret pattern found; matching values are suppressed.' >&2
+            exit 1
+          fi
+
+  host-configs:
+    name: Host configuration validation
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install ephemeral validation tools
+        run: sudo apt-get update && sudo apt-get install -y nginx fail2ban apache2-utils openssl podman
+      - name: Validate Nginx configuration in disposable runner
+        run: sudo bash tests/ci/nginx-config.sh
+      - name: Validate Fail2Ban configuration and filters
+        run: sudo bash tests/ci/fail2ban-config.sh
+      - name: Generate Quadlet units without starting services
+        run: sudo bash tests/ci/quadlet-generate.sh
+
+  observability:
+    name: Isolated Alloy to Loki smoke test
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Install isolated container runner
+        run: sudo apt-get update && sudo apt-get install -y podman curl
+      - name: Validate production Alloy configurations
+        run: bash tests/ci/observability-smoke.sh validate
+      - name: Smoke test log ingestion in ephemeral Podman containers
+        run: bash tests/ci/observability-smoke.sh integration
+
+  package:
+    name: Build configuration-only bundle
+    needs: [static, host-configs, observability]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Package without server data or credentials
+        run: |
+          tar --exclude=.git --exclude=backups --exclude=.env --exclude='*/.env' \
+            --exclude=secrets --exclude='*/secrets' --exclude='*.key' --exclude='*.pem' \
+            --exclude='*.crt' --exclude='*.p12' --exclude='*.pfx' --exclude='*.age' \
+            --exclude='*.enc' --exclude='*.db' --exclude='*.sqlite*' --exclude='*.log' \
+            --exclude='*.log.*' --exclude='*.jsonl' \
+            -czf "$RUNNER_TEMP/quadlet-ops.tgz" .
+          tar -tzf "$RUNNER_TEMP/quadlet-ops.tgz" | grep -qx './.env.example'
+          if tar -tzf "$RUNNER_TEMP/quadlet-ops.tgz" | grep -E '(^|/)\.env($|/)|(^|/)(secrets|backups)/|\.(key|pem|p12|pfx|age|enc|db|sqlite[^/]*)$'; then
+            echo 'Sensitive or stateful file included in package.' >&2
+            exit 1
+          fi
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: quadlet-ops-config
+          path: ${{ runner.temp }}/quadlet-ops.tgz
+          if-no-files-found: error
+          retention-days: 14

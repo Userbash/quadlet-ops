@@ -1,2 +1,3 @@
 #!/usr/bin/env fish
-exec (status dirname)/activate-node2.sh $argv
+set -l script_dir (dirname (status filename))
+exec "$script_dir/activate-node2.sh" $argv

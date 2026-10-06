@@ -1,0 +1,23 @@
+[Unit]
+Description=Nextcloud cron
+Requires=nextcloud-app.service
+After=nextcloud-app.service
+
+[Container]
+Image=docker.io/library/nextcloud:34-apache@sha256:37b109885aa3cba3e056362a899556a625c986f2c17cd2c0cc157d21c789f53b
+ContainerName=nextcloud-cron
+Network=nextcloud.network
+PodmanArgs=--network-alias=cron
+EnvironmentFile=/home/doom/nextcloud/.env
+Exec=/cron.sh
+Volume=/home/doom/nextcloud/app:/var/www/html:Z
+Volume=/home/doom/nextcloud/data:/var/www/html/data:Z
+Volume=/home/doom/nextcloud/config:/var/www/html/config:Z
+Volume=/home/doom/nextcloud/custom_apps:/var/www/html/custom_apps:Z
+Volume=/etc/localtime:/etc/localtime:ro
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

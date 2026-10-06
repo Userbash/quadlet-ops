@@ -1,0 +1,5 @@
+--- a/etc/nginx/conf.d/xhttp-hardening.conf
++++ b/etc/nginx/conf.d/xhttp-hardening.conf
+@@ -4,1 +4,1 @@
+-                          'status=$status limit_conn=$limit_conn_status bytes=$body_bytes_sent request_time=$request_time '
++                          'status=$status limit_conn=$limit_conn_status request_length=$request_length bytes=$body_bytes_sent request_time=$request_time '

@@ -1,0 +1,19 @@
+[Unit]
+Description=Nextcloud RabbitMQ
+After=nextcloud-network.service
+Requires=nextcloud-network.service
+
+[Container]
+Image=docker.io/library/rabbitmq:3.13-management-alpine@sha256:606d8c0d6b3c18d1da9afc53bc7cdb2a8d5486df91b5a9830e9e07626c9ae281
+ContainerName=nextcloud-rabbitmq
+Network=nextcloud.network
+PodmanArgs=--network-alias=rabbitmq
+EnvironmentFile=/home/doom/nextcloud/.env
+Environment=RABBITMQ_DEFAULT_VHOST=nextcloud
+Volume=/home/doom/nextcloud/rabbitmq:/var/lib/rabbitmq:Z
+
+[Service]
+Restart=always
+
+[Install]
+WantedBy=default.target

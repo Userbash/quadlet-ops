@@ -1,0 +1,18 @@
+[Unit]
+Description=Loki log store
+
+[Container]
+Image=docker.io/grafana/loki:3.7.8@sha256:1107dd5274e0ada47e42472b7a7e71f3b2a2fe878878108f3e2f9e51528f0193
+ContainerName=loki
+Network=observability.network
+PublishPort=127.0.0.1:3100:3100
+Volume=observability_loki-data:/loki
+Volume=/home/doom/observability/loki-config.yaml:/etc/loki/config.yaml:ro
+Exec=-config.file=/etc/loki/config.yaml
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

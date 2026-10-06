@@ -1,0 +1,16 @@
+[Unit]
+Description=Qdrant for SocratiCode in the rootless doom Podman environment
+
+[Container]
+Image=docker.io/qdrant/qdrant:v1.17.0@sha256:f1c7272cdac52b38c1a0e89313922d940ba50afd90d593a1605dbbc214e66ffb
+ContainerName=socraticode-qdrant
+PublishPort=127.0.0.1:6333:6333
+PublishPort=127.0.0.1:6334:6334
+Volume=socraticode_qdrant_storage:/qdrant/storage
+
+[Service]
+Restart=always
+TimeoutStartSec=900
+
+[Install]
+WantedBy=default.target

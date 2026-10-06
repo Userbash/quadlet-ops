@@ -1,0 +1,27 @@
+[Unit]
+Description=Grafana Alloy telemetry collector
+Wants=loki.service
+After=loki.service
+
+[Container]
+Image=docker.io/grafana/alloy:v1.10.2@sha256:bcf27f18c4402869af112fb39e35e1db3804a404686f4caa20bdf77814219223
+ContainerName=alloy
+Network=observability.network
+Environment=ALLOY_DEPLOY_MODE=docker
+Volume=observability_alloy-data:/var/lib/alloy/data
+Volume=/var/log/journal:/var/log/journal:ro
+Volume=/run/log/journal:/run/log/journal:ro
+Volume=/etc/machine-id:/etc/machine-id:ro
+Volume=/var/log/nginx:/var/log/nginx:ro
+Volume=/var/log/fail2ban.log:/var/log/fail2ban.log:ro
+Volume=/home/doom/dns-logs:/var/log/technitium/dns:ro
+Volume=/home/doom/dns-stats:/var/lib/dns-stats:ro
+Volume=/home/doom/observability/config.alloy:/etc/alloy/config.alloy:ro
+Exec=run /etc/alloy/config.alloy --storage.path=/var/lib/alloy/data
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

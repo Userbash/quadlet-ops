@@ -3,7 +3,8 @@
 ## Access Model
 
 - Operator scripts currently use SSH as root because they install packages and manage host files and services. Protect the SSH key, restrict its source addresses at the provider firewall, and avoid password-based automation.
-- The `doom` account is for rootless containers and owns its Podman socket and application data. Do not add it to `sudo`, `wheel`, or privileged host groups.
+- Deployment entry points require a pre-verified SSH host key. Verify fingerprints through an independent channel before adding them to `known_hosts`; never treat `ssh-keyscan` alone as identity verification.
+- The `doom` account is for rootless containers and owns its Podman socket and application data. It is not in `sudo` or `wheel`; `systemd-journal` membership grants Alloy read access to host logs and should be treated as sensitive.
 - Portainer can control every container and file accessible to the `doom` Podman account. Treat its administrator credentials as sensitive infrastructure credentials.
 - The Portainer Quadlet binds HTTPS to loopback. Use SSH forwarding or put it behind a separately reviewed TLS proxy. Do not expose the Podman socket over TCP.
 - Rootless Portainer support is not officially guaranteed. Do not use this optional integration as a security boundary or assume complete feature compatibility.
@@ -23,5 +24,5 @@
 - Restore writes archived paths directly to the server. Inspect archives and make a fresh backup first.
 - Bootstrap does not change SSH, DNS, TLS, or firewall configuration. Review and apply those separately so remote access is not accidentally lost.
 - GitHub Actions validates and packages public files only. It has no production credentials and never deploys to a server.
-- Bootstrap generates the Portainer administrator credential on the target. The bcrypt hash is readable by `doom`; the plaintext credential file is root-owned and mode `0600`. It is not placed in `.env`, Git, CI, or command output.
+- Portainer initializes the administrator on first access. Complete setup over the SSH tunnel and store credentials in a password manager.
 - The ACME private key remains under `/etc/letsencrypt` on the server and is excluded from Git and public bundles.

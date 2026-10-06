@@ -7,7 +7,7 @@ load_env() {
   local file=${NODE2_ENV_FILE:-.env}
   local name
   local -A overrides=()
-  for name in NODE2_HOST NODE2_USER NODE2_SSH_KEY NODE2_DOMAIN LETSENCRYPT_EMAIL NODE2_WEB_ROOT BACKUP_ROOT DEPLOY_CONFIRM; do
+  for name in NODE2_HOST NODE2_USER NODE2_SSH_KEY NODE2_DOMAIN LETSENCRYPT_EMAIL NODE2_WEB_ROOT NODE2_XUI_PANEL_PATH NODE2_DNS_PANEL_PATH NODE2_DNS_ALLOWED_CIDR NODE2_PANEL_USER NODE2_PANEL_PASSWORD NODE2_TECHNITIUM_API_TOKEN BACKUP_ROOT DEPLOY_CONFIRM; do
     [[ -v $name ]] && overrides[$name]=${!name}
   done
   if [[ -f "$file" ]]; then
@@ -30,10 +30,10 @@ confirm_write() { [[ ${DEPLOY_CONFIRM:-NO} == YES ]] || die 'write action requir
 ssh() {
   local -a key_args=()
   [[ -n ${NODE2_SSH_KEY:-} ]] && key_args=(-i "$NODE2_SSH_KEY")
-  command ssh "${key_args[@]}" "$@"
+  command ssh -o BatchMode=yes -o StrictHostKeyChecking=yes "${key_args[@]}" "$@"
 }
 scp() {
   local -a key_args=()
   [[ -n ${NODE2_SSH_KEY:-} ]] && key_args=(-i "$NODE2_SSH_KEY")
-  command scp "${key_args[@]}" "$@"
+  command scp -o BatchMode=yes -o StrictHostKeyChecking=yes "${key_args[@]}" "$@"
 }

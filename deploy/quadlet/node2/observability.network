@@ -1,0 +1,5 @@
+[Network]
+NetworkName=observability
+
+[Install]
+WantedBy=default.target

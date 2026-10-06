@@ -2,7 +2,7 @@
 
 ## Design
 
-The toolkit keeps the host baseline small and uses one unprivileged Linux account for rootless containers. Bash scripts connect over SSH; fish wrappers provide a consistent operator interface. Quadlet turns the Portainer container declaration into a user systemd service. See [Quadlet Services](QUADLET.md) for the complete unit contract.
+The toolkit keeps host edge services separate and uses one unprivileged Linux account for rootless containers. Bash scripts connect over SSH; fish wrappers provide a consistent operator interface. Quadlet turns each profile declaration into a `doom` user systemd service. See [Quadlet Services](QUADLET.md) for the unit structure.
 
 ```text
 operator workstation
@@ -11,8 +11,8 @@ operator workstation
   |                  +-- Nginx and Fail2Ban (system services)
   |                  +-- doom (unprivileged service account)
   |                       +-- rootless Podman API socket
-  |                       +-- Portainer Quadlet -> portainer.service
-  |                  +-- Nginx HTTP/HTTPS -> web root and JSON download log
+  |                       +-- Node2 Quadlet profile -> app and observability services
+  |                  +-- Nginx HTTP/HTTPS -> loopback container backends
   |                  +-- Certbot -> /etc/letsencrypt certificate renewal
   |                  +-- Fail2Ban -> Nginx jail actions
   +-- backup / validate / restore / activate
@@ -21,7 +21,7 @@ operator workstation
 ## Ownership and Privileges
 
 - The operator connects as root because the current scripts install packages, inspect host configuration, and restore files under `/etc`. Use a dedicated SSH key and restrict its source network at the provider firewall. A future least-privilege sudo policy must be designed before replacing root access.
-- `doom` owns container images, containers, and Portainer's persistent data. It is not added to `sudo`, `wheel`, or a privileged container group.
+- `doom` owns container images, containers, and bind-mounted service configuration/data. It is not added to `sudo` or `wheel`; the journald group is used only for Alloy log collection.
 - Bootstrap creates the rootless named volume `portainer_data`; the Portainer unit mounts it at `/data` so the UI database survives container replacement.
 - Subordinate UID and GID ranges are allocated only when the account lacks a usable mapping. The bootstrap avoids ranges already present in `/etc/subuid` and `/etc/subgid`.
 - `loginctl enable-linger doom` keeps the user's systemd manager alive at boot and after logout. The bootstrap starts and checks that manager, then enables the user Podman socket.
@@ -32,23 +32,23 @@ operator workstation
 - Nginx and Fail2Ban run as host systemd services.
 - Workload containers run rootless as `doom`; their Quadlet units are stored in `~/.config/containers/systemd`.
 - The provided Portainer unit binds HTTPS to `127.0.0.1:9443`. It does not publish Portainer to a public interface and does not create firewall rules.
-- Nginx serves `NODE2_WEB_ROOT`, logs download ranges as JSON, and uses Certbot-managed certificates after DNS and HTTP reachability are ready.
+- Nginx terminates TLS and proxies to loopback-only app ports. Certbot certificates are issued only after the root and subdomain DNS records resolve to the host.
 - Fail2Ban reads host Nginx logs and the configured jail file. It does not replace provider-level firewall rules.
-- Use an SSH local-forward for initial access. A public deployment requires a separately reviewed Nginx TLS proxy, DNS, and provider firewall rules.
-- The project does not ship application-specific Compose files. Each application should have a reviewed, version-controlled deployment definition, persistent-data plan, health check, and secret handling policy.
+- DNS, provider firewall rules, panel base paths, and application first-run setup remain environment-specific.
+- The profile ships service configurations, not user databases, uploads, zones, credentials, certificates, or container storage.
 
 ## First-Install Flow
 
 1. Provision a clean Debian or Ubuntu system with systemd and SSH key access.
 2. Configure the local `.env` and verify the SSH connection.
 3. Run the confirmed bootstrap. It installs baseline packages, prepares `doom` and rootless Podman, and starts Nginx and Fail2Ban.
-4. Run the confirmed deployment. It installs the Portainer Quadlet and starts `portainer.service` as `doom`.
-5. Reach Portainer through SSH forwarding, finish its initial admin setup, and deploy reviewed workload definitions.
-6. Configure DNS, TLS, firewall rules, and application backups as separate reviewed operations.
+4. Run the confirmed `node2-full` deployment. It installs Quadlet units and builds the pinned 3X-UI image as `doom`.
+5. Verify the rootless services, then configure web hostnames, Nginx/TLS, Fail2Ban, and metric collection after DNS is active.
+6. Initialize the apps and choose a separate application-data backup policy.
 
 ## State and Recovery
 
-Host and selected service configuration are captured in timestamped local archives with SHA-256 manifests. Restore verifies those manifests, but then writes archive paths directly to the target. Validation does not restart services; activation is separate and requires confirmation. Application databases, uploads, and Podman storage are not included.
+Host and selected service configuration are captured in timestamped local archives with SHA-256 manifests. Backups omit secrets, auth hashes, private keys, databases, uploads, DNS zones, logs, caches, and Podman storage. Validation does not restart services; activation is separate and requires confirmation.
 
 ## Portainer Compatibility
 
